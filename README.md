@@ -4,7 +4,7 @@ A project for deploying the Vanlab cluster and services using Ansible and Helm.
 
 Current configuration for the Vanlab cluster:
 
-4x Pi5 8GB w/ PoE + M2 Hat w/ 2TB drives
+- 4x Pi5 8GB w/ PoE + M2 Hat w/ 2TB drives
 
 ## Known Issue
 
@@ -22,5 +22,5 @@ Current playbook does not allow agents to join the cluster proprely. Manual step
 
 ## Todo
 
-[ ] Fix worker node joining in playbook
-[ ] Migrate to Pi ComputeBlades with AI expansion board
+- [ ] Fix worker node joining in playbook
+- [ ] Migrate to Pi ComputeBlades with AI expansion board
