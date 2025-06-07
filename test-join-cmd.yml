@@ -1,0 +1,29 @@
+---
+- name: Install K3s on the master node
+  hosts: masters
+  become: true
+  tasks:
+    - name: Install K3s server
+      shell: |
+        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--write-kubeconfig-mode 644 --flannel-iface=eth0" sh -
+      args:
+        creates: /etc/systemd/system/k3s.service
+
+    - name: Read K3s node token
+      slurp:
+        src: /var/lib/rancher/k3s/server/token
+      register: k3s_token_raw
+
+    - name: Set K3s token fact
+      set_fact:
+        k3s_node_token: "{{ k3s_token_raw['content'] | b64decode }}"
+
+- name: Install K3s on agent nodes
+  hosts: k3s_agents
+  become: true
+  vars:
+    k3s_url: "https://10.1.20.11:6443"
+  tasks:
+    - name: Install K3s agent
+      debug:
+        msg: "curl -sfL https://get.k3s.io | K3S_URL={{ k3s_url }} K3S_TOKEN={{ hostvars['10.1.20.11']['k3s_node_token'] }} INSTALL_K3S_EXEC=\"--flannel-iface=eth0\" sh -"

@@ -1,0 +1,109 @@
+---
+- name: Prepare all Raspberry Pi nodes for K3s
+  hosts: all
+  become: true
+  tasks:
+    - name: Disable swap
+      command: swapoff -a
+      ignore_errors: true
+
+    - name: Comment out swap in fstab
+      replace:
+        path: /etc/fstab
+        regexp: '^([^#].*swap.*)$'
+        replace: '# \1'
+
+    - name: Install required packages
+      apt:
+        name:
+          - curl
+          - sudo
+          - vim
+        update_cache: true
+      retries: 5
+      delay: 10
+      register: apt_result
+      until: apt_result is succeeded
+
+    - name: Load required kernel modules at boot
+      copy:
+        dest: /etc/modules-load.d/k3s.conf
+        content: |
+          br_netfilter
+          overlay
+
+    - name: Load kernel modules immediately
+      modprobe:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - br_netfilter
+        - overlay
+
+    - name: Apply sysctl settings for K3s networking
+      copy:
+        dest: /etc/sysctl.d/99-k3s.conf
+        content: |
+          net.bridge.bridge-nf-call-iptables = 1
+          net.bridge.bridge-nf-call-ip6tables = 1
+          net.ipv4.ip_forward = 1
+
+    - name: Apply sysctl settings
+      command: sysctl --system
+
+    - name: Read existing /boot/firmware/cmdline.txt
+      slurp:
+        src: /boot/firmware/cmdline.txt
+      register: cmdline_raw
+
+    - name: Set updated cmdline with cgroup parameters
+      set_fact:
+        updated_cmdline: "{{ cmdline_raw['content'] | b64decode | regex_replace('cgroup_\\S+', '') | regex_replace(' +$', '') ~ ' cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1' }}"
+
+    - name: Update /boot/firmware/cmdline.txt with cgroup parameters
+      copy:
+        content: "{{ updated_cmdline }}"
+        dest: /boot/firmware/cmdline.txt
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reboot to apply cgroup changes
+
+  handlers:
+    - name: Reboot to apply cgroup changes
+      reboot:
+        msg: "Rebooting to enable cgroups for Kubernetes"
+        pre_reboot_delay: 5
+        post_reboot_delay: 10
+        reboot_timeout: 300
+
+- name: Install K3s on the master node
+  hosts: masters
+  become: true
+  tasks:
+    - name: Install K3s server
+      shell: |
+        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--write-kubeconfig-mode 644 --flannel-iface=eth0" sh -
+      args:
+        creates: /etc/systemd/system/k3s.service
+
+    - name: Read K3s node token
+      slurp:
+        src: /var/lib/rancher/k3s/server/token
+      register: k3s_token_raw
+
+    - name: Set K3s token fact
+      set_fact:
+        k3s_node_token: "{{ k3s_token_raw['content'] | b64decode }}"
+
+- name: Install K3s on agent nodes
+  hosts: workers
+  become: true
+  vars:
+    k3s_url: "https://10.1.20.11:6443"
+  tasks:
+    - name: Install K3s agent
+      shell: |
+        curl -sfL https://get.k3s.io | K3S_URL={{ k3s_url }} K3S_TOKEN={{ hostvars['10.1.20.11']['k3s_node_token'] }} INSTALL_K3S_EXEC="--flannel-iface=eth0" sh -
+      args:
+        creates: /etc/systemd/system/k3s-agent.service
