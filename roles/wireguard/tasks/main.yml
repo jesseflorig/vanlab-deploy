@@ -1,0 +1,14 @@
+- name: Install WireGuard tools
+  apt:
+    name:
+      - wireguard
+      - wireguard-tools
+      - linux-headers-$(uname -r)
+    update_cache: yes
+
+- name: Enable IP forwarding
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    state: present
+    reload: yes

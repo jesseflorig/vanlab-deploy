@@ -1,0 +1,15 @@
+- name: Add Cloudflare Helm repo
+  command: helm repo add cloudflare https://cloudflare.github.io/helm-charts
+  changed_when: false
+
+- name: Update Helm repos
+  command: helm repo update
+
+- name: Create namespace
+  command: kubectl create namespace cloudflared --dry-run=client -o yaml | kubectl apply -f -
+
+- name: Install Cloudflared
+  command: >
+    helm upgrade --install cloudflared cloudflare/cloudflared
+    --namespace cloudflared
+    --set tunnelToken="{{ cloudflare_tunnel_token }}"

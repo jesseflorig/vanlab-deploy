@@ -1,0 +1,16 @@
+- name: Download Helm
+  get_url:
+    url: https://get.helm.sh/helm-v3.14.0-linux-arm64.tar.gz
+    dest: /tmp/helm.tar.gz
+
+- name: Extract Helm
+  unarchive:
+    src: /tmp/helm.tar.gz
+    dest: /tmp
+    remote_src: yes
+
+- name: Move Helm binary
+  copy:
+    src: /tmp/linux-arm64/helm
+    dest: /usr/local/bin/helm
+    mode: '0755'

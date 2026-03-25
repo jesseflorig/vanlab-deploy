@@ -1,0 +1,17 @@
+- name: Add Traefik Helm repo
+  command: helm repo add traefik https://traefik.github.io/charts
+  changed_when: false
+
+- name: Update Helm repos
+  command: helm repo update
+
+- name: Create namespace
+  command: kubectl create namespace traefik --dry-run=client -o yaml | kubectl apply -f -
+
+- name: Install Traefik
+  command: >
+    helm upgrade --install traefik traefik/traefik
+    --namespace traefik
+    --set service.type=LoadBalancer
+    --set ingressRoute.dashboard.enabled=true
+    --set ports.websecure.tls.enabled=true

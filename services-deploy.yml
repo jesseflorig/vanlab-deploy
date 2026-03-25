@@ -1,0 +1,19 @@
+- name: Install Host Tools
+  hosts: masters
+  become: true
+  roles:
+    - helm
+    - wireguard
+
+- name: Deploy services to edge nodes
+  hosts: edge
+  become: true
+  roles:
+    - traefik
+    - cloudflared
+
+- name: Deploy services to worker nodes
+  hosts: workers
+  become: true
+  roles:
+    - tbd
