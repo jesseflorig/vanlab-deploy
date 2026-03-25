@@ -1,0 +1,22 @@
+---
+- name: Check if hosts are online
+  hosts: all
+  gather_facts: false
+  ignore_unreachable: true
+  become: false
+
+  tasks:
+    - name: Ping host
+      ansible.builtin.ping:
+      register: ping_result
+      ignore_errors: true
+
+    - name: Report online hosts
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} is ONLINE"
+      when: ping_result is succeeded
+
+    - name: Report offline hosts
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} is OFFLINE or UNREACHABLE"
+      when: ping_result is not succeeded
