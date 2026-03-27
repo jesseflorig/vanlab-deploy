@@ -1,2 +1,5 @@
 .claude
 group_vars/all.yml
+*.retry
+*.log
+.DS_Store

@@ -1,0 +1,89 @@
+---
+# disk-health.yml
+# Checks NVMe drive presence and capacity on all cluster nodes.
+# Produces a consolidated human-readable report on stdout.
+#
+# Usage:
+#   ansible-playbook -i hosts.ini disk-health.yml --ask-become-pass
+#   ansible-playbook -i hosts.ini disk-health.yml --ask-become-pass --limit masters
+#   ansible-playbook -i hosts.ini disk-health.yml --ask-become-pass --extra-vars "expected_drives_min=2"
+#
+# Exit codes:
+#   0 - All reachable nodes have drives present
+#   2 - One or more nodes have MISSING or UNREACHABLE status
+
+- name: Collect drive info from all nodes
+  hosts: all
+  become: true
+  any_errors_fatal: false
+  ignore_unreachable: true
+  gather_facts: false
+  tasks:
+    - name: Mark node as reachable
+      ansible.builtin.set_fact:
+        node_reachable: true
+
+    - name: Run disk-health role
+      ansible.builtin.include_role:
+        name: disk-health
+
+- name: Report drive inventory
+  hosts: localhost
+  gather_facts: true
+  vars:
+    all_nodes: "{{ groups['all'] }}"
+    present_nodes: >-
+      {{ all_nodes | map('extract', hostvars)
+         | selectattr('node_disk_summary', 'defined')
+         | selectattr('node_disk_summary.overall_status', 'equalto', 'PRESENT')
+         | list | length }}
+    missing_nodes: >-
+      {{ all_nodes | map('extract', hostvars)
+         | selectattr('node_disk_summary', 'defined')
+         | selectattr('node_disk_summary.overall_status', 'equalto', 'MISSING')
+         | list | length }}
+    unreachable_nodes: >-
+      {{ all_nodes | map('extract', hostvars)
+         | rejectattr('node_reachable', 'defined')
+         | list | length }}
+  tasks:
+    - name: Display drive report
+      ansible.builtin.debug:
+        msg: |
+          ================================================================================
+          VANLAB DRIVE REPORT — {{ ansible_facts['date_time'].iso8601 }}
+          ================================================================================
+          {% for host in groups['all'] %}
+          {% set hv = hostvars[host] %}
+          {% set summary = hv.get('node_disk_summary', {}) %}
+          {% if not hv.get('node_reachable', false) %}
+          NODE: {{ host }}  [UNREACHABLE]
+          {% elif summary.get('overall_status') == 'MISSING' %}
+          NODE: {{ host }}  [MISSING — no drives detected]
+          {% else %}
+          NODE: {{ host }}  [{{ summary.get('overall_status', 'UNKNOWN') }}]
+          {% for drive in summary.get('drives', []) %}
+            {{ '%-12s' | format(drive.device) }}  {{ '%-30s' | format(drive.model) }}  {{ drive.size_human }}
+          {% endfor %}
+          {% endif %}
+          {% endfor %}
+          ================================================================================
+          SUMMARY  total={{ groups['all'] | length }}  present={{ present_nodes }}  missing={{ missing_nodes }}  unreachable={{ unreachable_nodes }}
+          RESULT: {{ 'PASS' if (missing_nodes | int == 0 and unreachable_nodes | int == 0) else 'FAIL' }}
+          ================================================================================
+
+    - name: Assert each node has drives present
+      ansible.builtin.assert:
+        that:
+          - hostvars[item].get('node_reachable', false) | bool
+          - hostvars[item].get('node_disk_summary', {}).get('overall_status', 'MISSING') != 'MISSING'
+        fail_msg: "FAILURE on {{ item }}: status={{ hostvars[item].get('node_disk_summary', {}).get('overall_status', 'UNREACHABLE') }}"
+        success_msg: "{{ item }}: OK"
+      loop: "{{ groups['all'] }}"
+      ignore_errors: true
+      register: drive_assertions
+
+    - name: Fail playbook if any node has missing or unreachable drives
+      ansible.builtin.fail:
+        msg: "One or more nodes have MISSING or UNREACHABLE status. See the report above."
+      when: drive_assertions is failed

@@ -16,6 +16,13 @@ Deploy services to cluster:
 ```
 ansible-playbook -i hosts.ini services-deploy.yml
 ```
+## Utilities
+Check NVMe drive presence, capacity, and S.M.A.R.T. health across all nodes:
+```
+ansible-playbook -i hosts.ini disk-health.yml
+```
+Exits with code `0` if all drives are healthy, `2` if any node has a CRITICAL, MISSING, or UNREACHABLE status.
+
 ## Known Issue
 Current playbook does not allow agents to join the cluster proprely. Manual steps:
 1. Stop the K3S agent if running

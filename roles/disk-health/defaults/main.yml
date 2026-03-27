@@ -1,0 +1,4 @@
+---
+# Minimum number of NVMe drives expected per node.
+# Nodes with fewer detected drives are flagged as MISSING.
+expected_drives_min: 1

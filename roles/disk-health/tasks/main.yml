@@ -1,0 +1,47 @@
+---
+# roles/disk-health/tasks/main.yml
+# Enumerates NVMe drives and collects capacity data,
+# assembles the node_disk_summary fact used by the disk-health.yml report play.
+
+# Enumerate NVMe block devices
+- name: Enumerate NVMe block devices
+  ansible.builtin.shell: lsblk -d -b -n -o NAME,SIZE,TYPE,MODEL
+  register: lsblk_raw
+  changed_when: false
+
+- name: Set nvme_devices fact
+  ansible.builtin.set_fact:
+    nvme_devices: "{{ lsblk_raw.stdout_lines | select('match', '^nvme') | list }}"
+    drive_facts: []
+
+# Build per-drive fact list from lsblk output
+- name: Build per-drive facts
+  ansible.builtin.set_fact:
+    drive_facts: "{{ drive_facts + [drive_entry] }}"
+  vars:
+    dev_parts: "{{ item.split() }}"
+    drive_entry:
+      device: "{{ dev_parts[0] }}"
+      model: "{{ dev_parts[3:] | join(' ') if dev_parts | length > 3 else 'Unknown' }}"
+      size_human: >-
+        {{ ((dev_parts[1] | int) / 1099511627776) | round(1) | string + 'T'
+           if dev_parts | length > 1 and (dev_parts[1] | int) >= 1099511627776
+           else ((dev_parts[1] | int) / 1073741824) | round(1) | string + 'G'
+           if dev_parts | length > 1
+           else 'Unknown' }}
+  loop: "{{ nvme_devices }}"
+
+# Derive overall node status (MISSING if fewer drives than expected)
+- name: Derive overall node status
+  ansible.builtin.set_fact:
+    node_overall_status: >-
+      {%- if nvme_devices | length < expected_drives_min | int -%}MISSING
+      {%- else -%}PRESENT{%- endif -%}
+
+# Assemble node_disk_summary fact
+- name: Assemble node_disk_summary fact
+  ansible.builtin.set_fact:
+    node_disk_summary:
+      hostname: "{{ inventory_hostname }}"
+      overall_status: "{{ node_overall_status | trim }}"
+      drives: "{{ drive_facts }}"
