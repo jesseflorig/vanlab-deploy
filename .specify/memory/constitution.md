@@ -1,50 +1,152 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+SYNC IMPACT REPORT
+==================
+Version change: [TEMPLATE] → 1.0.0 (initial); 1.0.0 → 1.0.1 (network topology); 1.0.1 → 1.1.0 (security hardening: principles VI + VII, IV expanded)
+Modified principles: N/A (initial ratification from template)
+Added sections:
+  - Core Principles (5 principles)
+  - Technology Stack
+  - Deployment Workflow
+  - Governance
+Removed sections: N/A
+Templates requiring updates:
+  - .specify/templates/plan-template.md ✅ — Constitution Check gates align with principles below
+  - .specify/templates/spec-template.md ✅ — No mandatory sections added/removed; existing structure fits
+  - .specify/templates/tasks-template.md ✅ — Task categories (idempotency checks, validation, secrets) reflected
+  - .specify/templates/agent-file-template.md ✅ — No principle-named references; generic structure unchanged
+  - .specify/templates/constitution-template.md ✅ — Source template; no changes required
+Deferred TODOs: None — all placeholders resolved.
+-->
+
+# Vanlab Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Infrastructure as Code
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+All cluster topology, node configuration, and service deployments MUST be expressed in Ansible
+playbooks or Helm charts. Manual changes applied directly to cluster nodes are prohibited. If
+a change cannot be made via automation, the automation MUST be updated first before the change
+is applied.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+**Rationale**: Prevents configuration drift and ensures the cluster state is always auditable
+and recoverable from the repository alone.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### II. Idempotency
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+Every Ansible playbook and Helm chart MUST be idempotent. Running any playbook or applying any
+chart multiple times MUST produce the same end state without errors or unintended side effects.
+Use Ansible `creates:`, `state:` guards, and Helm `--atomic` flags to enforce this.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+**Rationale**: Idempotency enables safe re-runs during partial failures and cluster rebuilds
+without risk of double-applying destructive operations.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### III. Reproducibility
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+The entire cluster MUST be rebuildable from scratch by following the documented procedure in
+`README.md` combined with the playbooks and chart values in this repository. Every manual
+remediation step (e.g., the current worker-join workaround) MUST be documented in `README.md`
+until it is automated.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+**Rationale**: A homelab cluster is frequently torn down and rebuilt. Full reproducibility
+reduces recovery time and cognitive overhead.
+
+### IV. Secrets Hygiene
+
+Secrets, tokens, credentials, keys, certificate private keys, and CA material MUST never be
+committed to the repository. Use `group_vars/example.all.yml` as the template; real values
+MUST be provided via an untracked `group_vars/all.yml` or an external secrets mechanism
+(e.g., Ansible Vault, environment variables). The `.gitignore` MUST exclude all files
+containing live secrets or private key material.
+
+The PKI lifecycle — CA creation, certificate issuance, and rotation — MUST be managed as code
+via a tool such as `cert-manager`, `step-ca`, or Ansible-managed PKI roles. No certificates
+or keys MAY be generated manually outside the repository workflow.
+
+**Rationale**: The repository may be public or shared. Leaked credentials or private keys can
+compromise the home network, exposed services, and any devices authenticating via certificates.
+
+### V. Simplicity
+
+Solutions MUST use the simplest adequate tool. Prefer plain Ansible tasks over custom modules,
+prefer Helm community charts over hand-rolled manifests, and prefer a flat role structure over
+deeply nested dependencies. Complexity MUST be justified by a concrete operational need;
+speculative abstractions are not permitted.
+
+**Rationale**: A homelab maintained by a small team (often one person) must be operable
+without deep context. Simple automation is faster to debug and cheaper to maintain.
+
+### VI. Encryption in Transit
+
+All communication crossing a VLAN boundary MUST be encrypted. Specifically:
+
+- MQTT MUST be served exclusively on MQTTS (port 8883); plaintext port 1883 MUST be disabled
+  or firewall-blocked at the broker
+- Traefik ingress MUST terminate TLS; HTTP MUST redirect to HTTPS
+- No service exposed on `10.1.20.x` MUST accept plaintext connections from `10.1.30.x` or
+  `10.1.40.x`
+- Internal cluster service-to-service traffic SHOULD use mTLS where the workload supports it
+
+**Rationale**: Camera and IoT VLANs are higher-attack-surface segments. Encrypting at the
+boundary limits the blast radius of a compromised device.
+
+### VII. Least Privilege & Certificate-Based Authentication
+
+- MQTT clients (cameras on `10.1.30.x`, sensors on `10.1.40.x`) MUST authenticate using
+  client certificates issued by the project's internal CA; username/password authentication
+  alone is insufficient
+- Firewall rules MUST be narrowly scoped: IoT devices MUST only reach the MQTT broker port;
+  cameras MUST only reach their designated endpoints — no broad cross-VLAN routing
+- All firewall rules and broker ACLs MUST be expressed as code and managed through this
+  repository (per Principle I)
+
+**Rationale**: Cert-based auth prevents credential-stuffing attacks and makes device
+revocation explicit and auditable. Narrow firewall rules contain lateral movement if a
+device is compromised.
+
+## Technology Stack
+
+The canonical technology choices for this project are:
+
+- **Orchestration**: K3s (lightweight Kubernetes) on Raspberry Pi OS (Debian-based, arm64)
+- **Automation**: Ansible — playbooks at repository root, roles in `roles/`
+- **Package management**: Helm — charts managed via `roles/helm/` and `services-deploy.yml`
+- **Hardware**: Raspberry Pi 5 (8 GB) with PoE HAT and M.2 2TB NVMe storage
+- **Network**:
+  - `10.1.20.x` — cluster VLAN: K3s nodes, ingress via Traefik, tunneling via Cloudflared,
+    VPN via WireGuard, MQTT broker
+  - `10.1.30.x` — camera VLAN: IP cameras (isolated; access to MQTT broker on `10.1.20.x`
+    MUST be explicitly permitted via firewall rules managed in this repository)
+  - `10.1.40.x` — IoT VLAN: sensors publishing to the MQTT broker on `10.1.20.x`
+    (cross-VLAN routing MUST be managed as code per Principle I)
+- **Inventory**: `hosts.ini` — MUST list all nodes with their roles (`masters`, `workers`)
+
+Deviations from this stack MUST be documented in `README.md` with a rationale.
+
+## Deployment Workflow
+
+1. **Verify hosts**: `ansible-playbook -i hosts.ini check_hosts.yml`
+2. **Deploy cluster**: `ansible-playbook -i hosts.ini k3s-deploy.yml`
+3. **Deploy services**: `ansible-playbook -i hosts.ini services-deploy.yml`
+
+- Playbooks MUST be run in the order above for a fresh cluster.
+- Each playbook MUST be independently re-runnable (see Principle II).
+- Known manual remediation steps are tracked in `README.md § Known Issue` until automated.
+- All new roles or playbooks MUST include a brief description comment at the top of the file.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution supersedes all informal practices. Amendments require:
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+1. A clear description of the change and rationale committed alongside the amendment.
+2. Version increment following semantic versioning:
+   - **MAJOR**: Removal or backward-incompatible redefinition of a principle.
+   - **MINOR**: New principle added or a section materially expanded.
+   - **PATCH**: Clarifications, wording fixes, or non-semantic refinements.
+3. `LAST_AMENDED_DATE` updated to the date of the commit.
+
+All playbook PRs/reviews MUST verify compliance with the principles above, particularly
+Idempotency (II) and Secrets Hygiene (IV). Complexity violations MUST be justified in the
+PR description before merging.
+
+**Version**: 1.1.0 | **Ratified**: 2026-03-27 | **Last Amended**: 2026-03-27
