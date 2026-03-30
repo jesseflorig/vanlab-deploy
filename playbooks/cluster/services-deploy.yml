@@ -4,8 +4,10 @@
   become: true
   roles:
     - helm
+    - cert-manager
     - traefik
     - whoami
+    - static-site
 
 - name: Deploy services to agent nodes
   hosts: agents

@@ -11,3 +11,8 @@ cloudflare_tunnel_token: <CLOUDFLARE_TUNNEL_TOKEN>
 # OPNsense REST API (used by network-deploy.yml)
 opnsense_api_key: <OPNSENSE_API_KEY>
 opnsense_api_secret: <OPNSENSE_API_SECRET>
+
+# cert-manager / Let's Encrypt DNS-01 via Cloudflare (used by services-deploy.yml → cert-manager role)
+# Token requires: Zone → DNS → Edit, Zone → Zone → Read for fleet1.cloud
+cloudflare_api_token: <CLOUDFLARE_API_TOKEN_WITH_DNS_EDIT_PERMISSION>
+acme_email: <YOUR_EMAIL_FOR_LETSENCRYPT_EXPIRY_NOTICES>

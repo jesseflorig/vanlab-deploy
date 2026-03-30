@@ -35,6 +35,15 @@
     mode: '0600'
   notify: Restart cloudflared
 
+- name: Deploy cloudflared tunnel config
+  ansible.builtin.template:
+    src: config.yml.j2
+    dest: /etc/cloudflared/config.yml
+    owner: root
+    group: root
+    mode: '0600'
+  notify: Restart cloudflared
+
 - name: Create cloudflared systemd service
   ansible.builtin.copy:
     dest: /etc/systemd/system/cloudflared.service
@@ -45,7 +54,7 @@
 
       [Service]
       Type=simple
-      ExecStart=/usr/bin/cloudflared tunnel run --token-file {{ cloudflared_token_path }}
+      ExecStart=/usr/bin/cloudflared tunnel --config /etc/cloudflared/config.yml run --token-file {{ cloudflared_token_path }}
       Restart=on-failure
       RestartSec=5s
 
