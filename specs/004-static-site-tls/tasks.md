@@ -90,10 +90,10 @@
 
 **Purpose**: Final idempotency and end-to-end validation.
 
-- [ ] T018 Idempotency: re-run `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --ask-become-pass` and confirm changed=0
-- [ ] T019 Idempotency: re-run `ansible-playbook -i hosts.ini playbooks/compute/edge-deploy.yml --ask-become-pass` and confirm changed=0
-- [ ] T020 End-to-end: verify `https://fleet1.cloud` loads with valid padlock from outside network (per quickstart.md Step 6)
-- [ ] T021 Redirect: verify `curl -I https://www.fleet1.cloud` returns 301 → https://fleet1.cloud (per quickstart.md Step 6)
+- [x] T018 Idempotency: re-run `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --ask-become-pass` and confirm changed=0
+- [x] T019 Idempotency: re-run `ansible-playbook -i hosts.ini playbooks/compute/edge-deploy.yml --ask-become-pass` and confirm changed=0
+- [x] T020 End-to-end: verify `https://fleet1.cloud` loads with valid padlock from outside network (per quickstart.md Step 6)
+- [x] T021 Redirect: verify `curl -I https://www.fleet1.cloud` returns 301 → https://fleet1.cloud (per quickstart.md Step 6)
 
 ---
 
