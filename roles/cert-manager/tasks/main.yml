@@ -41,6 +41,19 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   changed_when: false
 
+- name: Wait for cert-manager CRDs to be established
+  ansible.builtin.command: >
+    kubectl wait crd/clusterissuers.cert-manager.io
+    --for=condition=Established
+    --timeout=60s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  retries: 5
+  delay: 10
+  register: crd_wait
+  until: crd_wait.rc == 0
+
 - name: Render Cloudflare API token Secret
   ansible.builtin.template:
     src: cloudflare-secret.yaml.j2
@@ -72,6 +85,9 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: issuer_result
   changed_when: "'created' in issuer_result.stdout or 'configured' in issuer_result.stdout"
+  retries: 5
+  delay: 10
+  until: issuer_result.rc == 0
 
 - name: Render Certificate manifest
   ansible.builtin.template:
@@ -85,6 +101,9 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: cert_result
   changed_when: "'created' in cert_result.stdout or 'configured' in cert_result.stdout"
+  retries: 5
+  delay: 10
+  until: cert_result.rc == 0
 
 - name: Wait for certificate to be issued (DNS-01 typically takes 2-5 minutes)
   ansible.builtin.command: >
