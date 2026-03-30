@@ -54,7 +54,7 @@
 
       [Service]
       Type=simple
-      ExecStart=/usr/bin/cloudflared tunnel run --config /etc/cloudflared/config.yml
+      ExecStart=/usr/bin/cloudflared tunnel --config /etc/cloudflared/config.yml run --token-file {{ cloudflared_token_path }}
       Restart=on-failure
       RestartSec=5s
 

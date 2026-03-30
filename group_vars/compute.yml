@@ -3,10 +3,6 @@
 cloudflared_service_name: cloudflared
 cloudflared_token_path: /etc/cloudflared/tunnel-token
 
-# Cloudflare tunnel UUID — visible in Zero Trust dashboard under Networks → Tunnels
-# Not a secret; safe to commit
-cloudflare_tunnel_id: ""
-
 # Ingress routing rules for the cloudflared local config.yml
 # Processed in order — first match wins; catch-all is added automatically by the template
 cloudflared_ingress_rules:

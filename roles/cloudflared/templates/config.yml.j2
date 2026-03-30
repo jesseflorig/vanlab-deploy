@@ -1,6 +1,3 @@
-tunnel: {{ cloudflare_tunnel_id }}
-credentials-file: /etc/cloudflared/credentials.json
-
 ingress:
 {% for rule in cloudflared_ingress_rules %}
   - hostname: {{ rule.hostname }}
