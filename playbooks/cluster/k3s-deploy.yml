@@ -14,12 +14,15 @@
         replace: '# \1'
 
     - name: Install required packages
-      apt:
+      ansible.builtin.apt:
         name:
           - curl
           - sudo
           - vim
-        update_cache: true
+        state: present
+        update_cache: false
+        force_apt_get: true
+        lock_timeout: 60
       retries: 5
       delay: 10
       register: apt_result
@@ -83,18 +86,41 @@
   tasks:
     - name: Install K3s server
       shell: |
-        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--write-kubeconfig-mode 644 --flannel-iface={{ k3s_flannel_iface }}" sh -
+        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik --write-kubeconfig-mode 644 --flannel-iface={{ k3s_flannel_iface }}" sh -
       args:
         creates: /etc/systemd/system/k3s.service
 
+    - name: Wait for K3s API port to be reachable
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 6443
+        delay: 5
+        timeout: 120
+
+    - name: Wait for K3s API server to pass readiness check
+      ansible.builtin.uri:
+        url: "https://{{ ansible_host }}:6443/readyz"
+        validate_certs: false
+        status_code: [200, 401]
+      register: k3s_api_ready
+      until: k3s_api_ready.status in [200, 401]
+      retries: 24
+      delay: 5
+
+    - name: Wait for K3s token file to exist
+      ansible.builtin.wait_for:
+        path: /var/lib/rancher/k3s/server/token
+        state: present
+        timeout: 30
+
     - name: Read K3s node token
-      slurp:
+      ansible.builtin.slurp:
         src: /var/lib/rancher/k3s/server/token
       register: k3s_token_raw
 
     - name: Set K3s token fact
-      set_fact:
-        k3s_node_token: "{{ k3s_token_raw['content'] | b64decode }}"
+      ansible.builtin.set_fact:
+        k3s_node_token: "{{ k3s_token_raw['content'] | b64decode | regex_replace('\n', '') }}"
 
 - name: Install K3s on agent nodes
   hosts: agents
@@ -102,8 +128,40 @@
   vars:
     k3s_url: "https://{{ k3s_master_ip }}:6443"
   tasks:
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
     - name: Install K3s agent
-      shell: |
-        curl -sfL https://get.k3s.io | K3S_URL={{ k3s_url }} K3S_TOKEN={{ hostvars['node1']['k3s_node_token'] }} INSTALL_K3S_EXEC="--flannel-iface={{ k3s_flannel_iface }}" sh -
-      args:
-        creates: /etc/systemd/system/k3s-agent.service
+      ansible.builtin.shell: |
+        curl -sfL https://get.k3s.io | \
+          K3S_URL={{ k3s_url }} \
+          K3S_TOKEN={{ hostvars[groups['servers'][0]]['k3s_node_token'] }} \
+          INSTALL_K3S_EXEC="--flannel-iface={{ k3s_flannel_iface }}" sh -
+      when: >
+        ansible_facts.services['k3s-agent.service'] is not defined
+        or ansible_facts.services['k3s-agent.service']['state'] != 'running'
+
+    - name: Wait for agent node to appear Ready
+      ansible.builtin.shell: |
+        kubectl get node {{ inventory_hostname }} \
+          -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+      register: node_ready
+      until: node_ready.stdout == "True"
+      retries: 30
+      delay: 10
+      delegate_to: "{{ groups['servers'][0] }}"
+      become: true
+      changed_when: false
+
+- name: Display cluster node status
+  hosts: "{{ groups['servers'][0] }}"
+  become: true
+  tasks:
+    - name: Get cluster node status
+      command: kubectl get nodes -o wide
+      register: node_status
+      changed_when: false
+
+    - name: Show cluster node status
+      ansible.builtin.debug:
+        msg: "{{ node_status.stdout_lines }}"

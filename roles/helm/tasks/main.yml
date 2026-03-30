@@ -14,3 +14,4 @@
     src: /tmp/linux-arm64/helm
     dest: /usr/local/bin/helm
     mode: '0755'
+    remote_src: yes
