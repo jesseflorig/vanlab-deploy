@@ -19,12 +19,33 @@
   register: cm_namespace
   changed_when: "'created' in cm_namespace.stdout or 'configured' in cm_namespace.stdout"
 
+- name: Apply cert-manager CRDs
+  ansible.builtin.command: >
+    kubectl apply -f
+    https://github.com/cert-manager/cert-manager/releases/download/{{ cert_manager_version }}/cert-manager.crds.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: crds_result
+  changed_when: "'created' in crds_result.stdout or 'configured' in crds_result.stdout"
+
+- name: Wait for cert-manager CRDs to be established
+  ansible.builtin.command: >
+    kubectl wait crd/clusterissuers.cert-manager.io
+    --for=condition=Established
+    --timeout=60s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  retries: 5
+  delay: 5
+  register: crd_wait
+  until: crd_wait.rc == 0
+
 - name: Install cert-manager via Helm
   ansible.builtin.command: >
     helm upgrade --install cert-manager jetstack/cert-manager
     --namespace {{ cert_manager_namespace }}
     --version {{ cert_manager_version }}
-    --set crds.enabled=true
     --wait
     --timeout 3m
   environment:
@@ -40,19 +61,6 @@
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   changed_when: false
-
-- name: Wait for cert-manager CRDs to be established
-  ansible.builtin.command: >
-    kubectl wait crd/clusterissuers.cert-manager.io
-    --for=condition=Established
-    --timeout=60s
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-  changed_when: false
-  retries: 5
-  delay: 10
-  register: crd_wait
-  until: crd_wait.rc == 0
 
 - name: Render Cloudflare API token Secret
   ansible.builtin.template:
