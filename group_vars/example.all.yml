@@ -1,1 +1,13 @@
-cloudflare_tunnel_token: <CLOUDFLARE_TOKEN>
+# Secrets template — copy to group_vars/all.yml and fill in real values
+# group_vars/all.yml is gitignored
+
+# SSH credentials (used by all managed hosts)
+ansible_ssh_pass: <SSH_PASSWORD>
+ansible_become_pass: <SUDO_PASSWORD>
+
+# Cloudflare Tunnel (used by edge-deploy.yml → cloudflared role)
+cloudflare_tunnel_token: <CLOUDFLARE_TUNNEL_TOKEN>
+
+# OPNsense REST API (used by network-deploy.yml)
+opnsense_api_key: <OPNSENSE_API_KEY>
+opnsense_api_secret: <OPNSENSE_API_SECRET>

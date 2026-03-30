@@ -1,6 +1,6 @@
 ---
-- name: Install K3s on the master node
-  hosts: masters
+- name: Install K3s on the server node
+  hosts: servers
   become: true
   tasks:
     - name: Install K3s server

@@ -1,0 +1,16 @@
+---
+- name: Install Host Tools
+  hosts: servers
+  become: true
+  roles:
+    - helm
+    - wireguard
+    - traefik
+
+- name: Deploy services to agent nodes
+  hosts: agents
+  become: true
+  tasks:
+    - name: No agent services defined yet
+      ansible.builtin.debug:
+        msg: "No agent-specific services configured"

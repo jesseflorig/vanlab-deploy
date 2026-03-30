@@ -1,6 +1,6 @@
 ---
-- name: Install K3s on the master node
-  hosts: masters
+- name: Install K3s on the server node
+  hosts: servers
   become: true
   tasks:
     - name: Install K3s server
@@ -19,11 +19,11 @@
         k3s_node_token: "{{ k3s_token_raw['content'] | b64decode }}"
 
 - name: Install K3s on agent nodes
-  hosts: k3s_agents
+  hosts: agents
   become: true
   vars:
     k3s_url: "https://10.1.20.11:6443"
   tasks:
     - name: Install K3s agent
       debug:
-        msg: "curl -sfL https://get.k3s.io | K3S_URL={{ k3s_url }} K3S_TOKEN={{ hostvars['10.1.20.11']['k3s_node_token'] }} INSTALL_K3S_EXEC=\"--flannel-iface=eth0\" sh -"
+        msg: "curl -sfL https://get.k3s.io | K3S_URL={{ k3s_url }} K3S_TOKEN={{ hostvars['node1']['k3s_node_token'] }} INSTALL_K3S_EXEC=\"--flannel-iface=eth0\" sh -"

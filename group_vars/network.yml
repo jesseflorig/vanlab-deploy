@@ -1,0 +1,4 @@
+---
+# OPNsense connection — non-secret vars
+opnsense_firewall: "10.1.1.1"
+opnsense_api_verify_ssl: false

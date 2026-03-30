@@ -1,6 +1,6 @@
 ---
-- name: Prepare all Raspberry Pi nodes for K3s
-  hosts: all
+- name: Prepare all K3s cluster nodes
+  hosts: cluster
   become: true
   tasks:
     - name: Disable swap
@@ -77,13 +77,13 @@
         post_reboot_delay: 10
         reboot_timeout: 300
 
-- name: Install K3s on the master node
-  hosts: masters
+- name: Install K3s on server nodes
+  hosts: servers
   become: true
   tasks:
     - name: Install K3s server
       shell: |
-        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--write-kubeconfig-mode 644 --flannel-iface=eth0" sh -
+        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--write-kubeconfig-mode 644 --flannel-iface={{ k3s_flannel_iface }}" sh -
       args:
         creates: /etc/systemd/system/k3s.service
 
@@ -97,13 +97,13 @@
         k3s_node_token: "{{ k3s_token_raw['content'] | b64decode }}"
 
 - name: Install K3s on agent nodes
-  hosts: workers
+  hosts: agents
   become: true
   vars:
-    k3s_url: "https://10.1.20.11:6443"
+    k3s_url: "https://{{ k3s_master_ip }}:6443"
   tasks:
     - name: Install K3s agent
       shell: |
-        curl -sfL https://get.k3s.io | K3S_URL={{ k3s_url }} K3S_TOKEN={{ hostvars['10.1.20.11']['k3s_node_token'] }} INSTALL_K3S_EXEC="--flannel-iface=eth0" sh -
+        curl -sfL https://get.k3s.io | K3S_URL={{ k3s_url }} K3S_TOKEN={{ hostvars['node1']['k3s_node_token'] }} INSTALL_K3S_EXEC="--flannel-iface={{ k3s_flannel_iface }}" sh -
       args:
         creates: /etc/systemd/system/k3s-agent.service

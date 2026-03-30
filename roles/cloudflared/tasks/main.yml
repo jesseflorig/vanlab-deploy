@@ -1,15 +1,68 @@
-- name: Add Cloudflare Helm repo
-  command: helm repo add cloudflare https://cloudflare.github.io/helm-charts
-  changed_when: false
+---
+- name: Add Cloudflare GPG key
+  ansible.builtin.get_url:
+    url: https://pkg.cloudflare.com/cloudflare-main.gpg
+    dest: /usr/share/keyrings/cloudflare-main.gpg
+    mode: '0644'
 
-- name: Update Helm repos
-  command: helm repo update
+- name: Add Cloudflare apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared bookworm main"
+    state: present
+    filename: cloudflared
 
-- name: Create namespace
-  command: kubectl create namespace cloudflared --dry-run=client -o yaml | kubectl apply -f -
+- name: Install cloudflared
+  ansible.builtin.apt:
+    name: cloudflared
+    state: present
+    update_cache: true
+  notify: Restart cloudflared
 
-- name: Install Cloudflared
-  command: >
-    helm upgrade --install cloudflared cloudflare/cloudflared
-    --namespace cloudflared
-    --set tunnelToken="{{ cloudflare_tunnel_token }}"
+- name: Create cloudflared config directory
+  ansible.builtin.file:
+    path: /etc/cloudflared
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Configure cloudflared tunnel token
+  ansible.builtin.copy:
+    dest: "{{ cloudflared_token_path }}"
+    content: "{{ cloudflare_tunnel_token }}"
+    owner: root
+    group: root
+    mode: '0600'
+  notify: Restart cloudflared
+
+- name: Create cloudflared systemd service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/cloudflared.service
+    content: |
+      [Unit]
+      Description=Cloudflare Tunnel
+      After=network.target
+
+      [Service]
+      Type=simple
+      ExecStart=/usr/bin/cloudflared tunnel run --token-file {{ cloudflared_token_path }}
+      Restart=on-failure
+      RestartSec=5s
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: '0644'
+  notify: Restart cloudflared
+
+- name: Enable and start cloudflared
+  ansible.builtin.systemd_service:
+    name: "{{ cloudflared_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Verify cloudflared tunnel is active
+  ansible.builtin.systemd_service:
+    name: "{{ cloudflared_service_name }}"
+  register: cloudflared_status
+  failed_when: cloudflared_status.status.ActiveState != 'active'

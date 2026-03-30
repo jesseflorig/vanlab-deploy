@@ -1,0 +1,4 @@
+---
+# Edge compute device configuration
+cloudflared_service_name: cloudflared
+cloudflared_token_path: /etc/cloudflared/tunnel-token

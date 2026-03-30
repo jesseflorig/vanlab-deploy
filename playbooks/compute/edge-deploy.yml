@@ -1,0 +1,13 @@
+---
+- name: Deploy Cloudflared to edge device
+  hosts: compute
+  become: true
+  pre_tasks:
+    - name: Assert cloudflare_tunnel_token is defined
+      ansible.builtin.assert:
+        that:
+          - cloudflare_tunnel_token is defined
+          - cloudflare_tunnel_token | length > 0
+        fail_msg: "cloudflare_tunnel_token must be set in group_vars/all.yml"
+  roles:
+    - cloudflared

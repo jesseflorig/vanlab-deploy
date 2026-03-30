@@ -4,16 +4,16 @@
 # Produces a consolidated human-readable report on stdout.
 #
 # Usage:
-#   ansible-playbook -i hosts.ini disk-health.yml --ask-become-pass
-#   ansible-playbook -i hosts.ini disk-health.yml --ask-become-pass --limit masters
-#   ansible-playbook -i hosts.ini disk-health.yml --ask-become-pass --extra-vars "expected_drives_min=2"
+#   ansible-playbook -i hosts.ini playbooks/utilities/disk-health.yml --ask-become-pass
+#   ansible-playbook -i hosts.ini playbooks/utilities/disk-health.yml --ask-become-pass --limit servers
+#   ansible-playbook -i hosts.ini playbooks/utilities/disk-health.yml --ask-become-pass --extra-vars "expected_drives_min=2"
 #
 # Exit codes:
 #   0 - All reachable nodes have drives present
 #   2 - One or more nodes have MISSING or UNREACHABLE status
 
-- name: Collect drive info from all nodes
-  hosts: all
+- name: Collect drive info from all cluster nodes
+  hosts: cluster
   become: true
   any_errors_fatal: false
   ignore_unreachable: true
@@ -31,7 +31,7 @@
   hosts: localhost
   gather_facts: true
   vars:
-    all_nodes: "{{ groups['all'] }}"
+    all_nodes: "{{ groups['cluster'] }}"
     present_nodes: >-
       {{ all_nodes | map('extract', hostvars)
          | selectattr('node_disk_summary', 'defined')
@@ -53,7 +53,7 @@
           ================================================================================
           VANLAB DRIVE REPORT — {{ ansible_facts['date_time'].iso8601 }}
           ================================================================================
-          {% for host in groups['all'] %}
+          {% for host in groups['cluster'] %}
           {% set hv = hostvars[host] %}
           {% set summary = hv.get('node_disk_summary', {}) %}
           {% if not hv.get('node_reachable', false) %}
@@ -68,7 +68,7 @@
           {% endif %}
           {% endfor %}
           ================================================================================
-          SUMMARY  total={{ groups['all'] | length }}  present={{ present_nodes }}  missing={{ missing_nodes }}  unreachable={{ unreachable_nodes }}
+          SUMMARY  total={{ groups['cluster'] | length }}  present={{ present_nodes }}  missing={{ missing_nodes }}  unreachable={{ unreachable_nodes }}
           RESULT: {{ 'PASS' if (missing_nodes | int == 0 and unreachable_nodes | int == 0) else 'FAIL' }}
           ================================================================================
 
@@ -79,7 +79,7 @@
           - hostvars[item].get('node_disk_summary', {}).get('overall_status', 'MISSING') != 'MISSING'
         fail_msg: "FAILURE on {{ item }}: status={{ hostvars[item].get('node_disk_summary', {}).get('overall_status', 'UNREACHABLE') }}"
         success_msg: "{{ item }}: OK"
-      loop: "{{ groups['all'] }}"
+      loop: "{{ groups['cluster'] }}"
       ignore_errors: true
       register: drive_assertions
 

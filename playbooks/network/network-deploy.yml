@@ -1,0 +1,38 @@
+---
+# network-deploy.yml
+# Manages OPNsense router configuration via REST API.
+# Runs on localhost; connects to OPNsense at {{ opnsense_firewall }} over HTTPS.
+#
+# Credentials sourced from group_vars/all.yml (gitignored):
+#   opnsense_api_key, opnsense_api_secret
+# Non-secret connection vars in group_vars/network.yml:
+#   opnsense_firewall, opnsense_api_verify_ssl
+#
+# Usage:
+#   ansible-playbook -i hosts.ini playbooks/network/network-deploy.yml --check
+#   ansible-playbook -i hosts.ini playbooks/network/network-deploy.yml
+#
+# Prerequisites:
+#   ansible-galaxy collection install -r requirements.yml
+
+- name: Configure OPNsense
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  module_defaults:
+    group/oxlorg.opnsense.all:
+      firewall: "{{ opnsense_firewall }}"
+      api_key: "{{ opnsense_api_key }}"
+      api_secret: "{{ opnsense_api_secret }}"
+      ssl_verify: "{{ opnsense_api_verify_ssl }}"
+  tasks:
+    - name: Verify OPNsense API connectivity
+      oxlorg.opnsense.raw:
+        module: core
+        controller: firmware
+        command: info
+      register: opnsense_info
+
+    - name: Display OPNsense system information
+      ansible.builtin.debug:
+        msg: "Connected to OPNsense — firmware: {{ opnsense_info.data.product_version | default('unknown') }}"
