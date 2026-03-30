@@ -2,3 +2,19 @@
 # Edge compute device configuration
 cloudflared_service_name: cloudflared
 cloudflared_token_path: /etc/cloudflared/tunnel-token
+
+# Cloudflare tunnel UUID — visible in Zero Trust dashboard under Networks → Tunnels
+# Not a secret; safe to commit
+cloudflare_tunnel_id: ""
+
+# Ingress routing rules for the cloudflared local config.yml
+# Processed in order — first match wins; catch-all is added automatically by the template
+cloudflared_ingress_rules:
+  - hostname: fleet1.cloud
+    service: https://10.1.20.11:30443
+    originServerName: fleet1.cloud
+  - hostname: www.fleet1.cloud
+    service: https://10.1.20.11:30443
+    originServerName: fleet1.cloud
+  - hostname: whoami.fleet1.cloud
+    service: http://10.1.20.11:30080

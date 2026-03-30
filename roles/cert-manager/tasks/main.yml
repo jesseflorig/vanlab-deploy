@@ -1,0 +1,97 @@
+---
+- name: Add jetstack Helm repo
+  ansible.builtin.command: helm repo add jetstack https://charts.jetstack.io
+  register: helm_repo_add
+  changed_when: "'has been added' in helm_repo_add.stdout"
+  failed_when:
+    - helm_repo_add.rc != 0
+    - "'already exists' not in helm_repo_add.stderr | lower"
+
+- name: Update Helm repos
+  ansible.builtin.command: helm repo update
+  changed_when: false
+
+- name: Ensure cert-manager namespace exists
+  ansible.builtin.shell: |
+    kubectl create namespace {{ cert_manager_namespace }} --dry-run=client -o yaml | kubectl apply -f -
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: cm_namespace
+  changed_when: "'created' in cm_namespace.stdout or 'configured' in cm_namespace.stdout"
+
+- name: Install cert-manager via Helm
+  ansible.builtin.command: >
+    helm upgrade --install cert-manager jetstack/cert-manager
+    --namespace {{ cert_manager_namespace }}
+    --version {{ cert_manager_version }}
+    --set crds.enabled=true
+    --wait
+    --timeout 3m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: cm_install
+  changed_when: "'has been upgraded' in cm_install.stdout or 'has been deployed' in cm_install.stdout"
+
+- name: Wait for cert-manager webhook to be ready
+  ansible.builtin.command: >
+    kubectl rollout status deployment/cert-manager-webhook
+    -n {{ cert_manager_namespace }}
+    --timeout=120s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+
+- name: Render Cloudflare API token Secret
+  ansible.builtin.template:
+    src: cloudflare-secret.yaml.j2
+    dest: /tmp/cf-secret.yaml
+    mode: "0600"
+  no_log: true
+
+- name: Apply Cloudflare API token Secret
+  ansible.builtin.command: kubectl apply -f /tmp/cf-secret.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: cf_secret
+  changed_when: "'created' in cf_secret.stdout or 'configured' in cf_secret.stdout"
+
+- name: Remove Cloudflare Secret temp file
+  ansible.builtin.file:
+    path: /tmp/cf-secret.yaml
+    state: absent
+
+- name: Render ClusterIssuer manifest
+  ansible.builtin.template:
+    src: cluster-issuer.yaml.j2
+    dest: /tmp/cluster-issuer.yaml
+    mode: "0644"
+
+- name: Apply ClusterIssuer
+  ansible.builtin.command: kubectl apply -f /tmp/cluster-issuer.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: issuer_result
+  changed_when: "'created' in issuer_result.stdout or 'configured' in issuer_result.stdout"
+
+- name: Render Certificate manifest
+  ansible.builtin.template:
+    src: certificate.yaml.j2
+    dest: /tmp/fleet1-certificate.yaml
+    mode: "0644"
+
+- name: Apply Certificate CR
+  ansible.builtin.command: kubectl apply -f /tmp/fleet1-certificate.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: cert_result
+  changed_when: "'created' in cert_result.stdout or 'configured' in cert_result.stdout"
+
+- name: Wait for certificate to be issued (DNS-01 typically takes 2-5 minutes)
+  ansible.builtin.command: >
+    kubectl wait certificate/fleet1-cloud-tls
+    -n {{ certificate_namespace }}
+    --for=condition=Ready
+    --timeout=300s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false

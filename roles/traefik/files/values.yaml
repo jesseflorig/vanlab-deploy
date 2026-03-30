@@ -3,20 +3,28 @@ service:
 
 ports:
   web:
-    port: 80
-    expose:
-      default: true
+    port: 8000
     exposedPort: 80
+    protocol: TCP
     nodePort: 30080
+    redirectTo:
+      port: websecure
+      permanent: true
   websecure:
-    expose:
-      default: false
+    port: 8443
+    exposedPort: 443
+    protocol: TCP
+    nodePort: 30443
+    tls:
+      enabled: true
 
 ingressRoute:
   dashboard:
     enabled: false
 
 providers:
+  kubernetesCRD:
+    enabled: true
   kubernetesIngress:
     enabled: true
 
