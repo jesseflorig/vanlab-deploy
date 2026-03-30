@@ -82,9 +82,9 @@
 
 **Purpose**: Final validation across all stories.
 
-- [ ] T013 Idempotency validation: re-run `ansible-playbook -i hosts.ini playbooks/cluster/k3s-deploy.yml --ask-become-pass` and confirm changed=0
-- [ ] T014 Idempotency validation: re-run `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --ask-become-pass` and confirm changed=0
-- [ ] T015 End-to-end validation: from a cellular device, curl https://whoami.fleet1.cloud and confirm whoami response headers received (per quickstart.md Step 5)
+- [x] T013 Idempotency validation: re-run `ansible-playbook -i hosts.ini playbooks/cluster/k3s-deploy.yml --ask-become-pass` and confirm changed=0
+- [x] T014 Idempotency validation: re-run `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --ask-become-pass` and confirm changed=0
+- [x] T015 End-to-end validation: from a cellular device, curl https://whoami.fleet1.cloud and confirm whoami response headers received (per quickstart.md Step 5)
 
 ---
 
