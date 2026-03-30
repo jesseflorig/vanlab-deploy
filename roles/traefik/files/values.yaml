@@ -7,16 +7,16 @@ ports:
     exposedPort: 80
     protocol: TCP
     nodePort: 30080
-    redirectTo:
-      port: websecure
-      permanent: true
+    redirections:
+      entryPoint:
+        to: websecure
+        scheme: https
+        permanent: true
   websecure:
     port: 8443
     exposedPort: 443
     protocol: TCP
     nodePort: 30443
-    tls:
-      enabled: true
 
 ingressRoute:
   dashboard:
