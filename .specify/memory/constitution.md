@@ -1,7 +1,7 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: [TEMPLATE] → 1.0.0 (initial); 1.0.0 → 1.0.1 (network topology); 1.0.1 → 1.1.0 (security hardening: principles VI + VII, IV expanded)
+Version change: [TEMPLATE] → 1.0.0 (initial); 1.0.0 → 1.0.1 (network topology); 1.0.1 → 1.1.0 (security hardening: principles VI + VII, IV expanded); 1.1.0 → 1.1.1 (topology refinement: edge VLAN, server/agent nomenclature, hardware corrections)
 Modified principles: N/A (initial ratification from template)
 Added sections:
   - Core Principles (5 principles)
@@ -45,7 +45,7 @@ without risk of double-applying destructive operations.
 
 The entire cluster MUST be rebuildable from scratch by following the documented procedure in
 `README.md` combined with the playbooks and chart values in this repository. Every manual
-remediation step (e.g., the current worker-join workaround) MUST be documented in `README.md`
+remediation step (e.g., the current agent-join workaround) MUST be documented in `README.md`
 until it is automated.
 
 **Rationale**: A homelab cluster is frequently torn down and rebuilt. Full reproducibility
@@ -111,15 +111,24 @@ The canonical technology choices for this project are:
 - **Orchestration**: K3s (lightweight Kubernetes) on Raspberry Pi OS (Debian-based, arm64)
 - **Automation**: Ansible — playbooks at repository root, roles in `roles/`
 - **Package management**: Helm — charts managed via `roles/helm/` and `services-deploy.yml`
-- **Hardware**: Raspberry Pi 5 (8 GB) with PoE HAT and M.2 2TB NVMe storage
+- **Hardware**:
+  - Cluster nodes: Raspberry Pi CM5 (64 GB) with PoE HAT and M.2 2TB NVMe storage
+  - Edge device: Waveshare CM5-PoE-BASE-A (Raspberry Pi CM5, arm64 Debian-based)
+  - Switches: 1× Netgear GS308T, 3× Netgear GS308EPP (Smart Managed Plus — VLAN-capable
+    via web UI only; not Ansible-manageable)
+  - Router: OPNsense (`10.1.1.1`) — managed via `community.opnsense` REST API
 - **Network**:
-  - `10.1.20.x` — cluster VLAN: K3s nodes, ingress via Traefik, tunneling via Cloudflared,
+  - `10.1.1.x` — management VLAN: OPNsense router (`10.1.1.1`), switch management
+  - `10.1.10.x` — edge VLAN: CM5 Cloudflared device; outbound internet (443) only;
+    allowed to reach Traefik on `10.1.20.x` (80/443); SSH access from management VLAN only
+  - `10.1.20.x` — cluster VLAN: K3s server/agent nodes, ingress via Traefik,
     VPN via WireGuard, MQTT broker
   - `10.1.30.x` — camera VLAN: IP cameras (isolated; access to MQTT broker on `10.1.20.x`
     MUST be explicitly permitted via firewall rules managed in this repository)
   - `10.1.40.x` — IoT VLAN: sensors publishing to the MQTT broker on `10.1.20.x`
     (cross-VLAN routing MUST be managed as code per Principle I)
-- **Inventory**: `hosts.ini` — MUST list all nodes with their roles (`masters`, `workers`)
+- **Inventory**: `hosts.ini` — MUST list all nodes with their roles (`servers`, `agents`
+  for K3s cluster; `network` for OPNsense; `compute` for edge device)
 
 Deviations from this stack MUST be documented in `README.md` with a rationale.
 
@@ -149,4 +158,4 @@ All playbook PRs/reviews MUST verify compliance with the principles above, parti
 Idempotency (II) and Secrets Hygiene (IV). Complexity violations MUST be justified in the
 PR description before merging.
 
-**Version**: 1.1.0 | **Ratified**: 2026-03-27 | **Last Amended**: 2026-03-27
+**Version**: 1.1.1 | **Ratified**: 2026-03-27 | **Last Amended**: 2026-03-29

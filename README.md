@@ -4,7 +4,7 @@ A project for deploying the Vanlab cluster and services using Ansible and Helm.
 
 Current configuration for the Vanlab cluster:
 
-- 4x Pi5 8GB w/ PoE + M2 Hat w/ 2TB drives
+- 4x CM5 64GB w/ PoE HAT + M.2 2TB NVMe drives
 
 ## Deploy
 Deploy the K3s cluster:
