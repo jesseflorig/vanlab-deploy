@@ -1,0 +1,58 @@
+---
+# Install and configure Longhorn node prerequisites on every cluster node.
+# Must run on all nodes (servers + agents) before the longhorn role installs
+# via Helm, as the Longhorn DaemonSet requires iSCSI and NFS on every node.
+
+- name: Install Longhorn prerequisite packages
+  ansible.builtin.apt:
+    name:
+      - open-iscsi
+      - nfs-common
+      - util-linux
+    state: present
+    update_cache: false
+    lock_timeout: 60
+  retries: 5
+  delay: 10
+  register: apt_result
+  until: apt_result is succeeded
+
+- name: Enable and start iscsid service
+  ansible.builtin.systemd:
+    name: iscsid
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Enable and start open-iscsi service
+  ansible.builtin.systemd:
+    name: open-iscsi
+    enabled: true
+    state: started
+
+- name: Persist iscsi_tcp kernel module across reboots
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/longhorn.conf
+    content: |
+      iscsi_tcp
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Load iscsi_tcp kernel module immediately
+  community.general.modprobe:
+    name: iscsi_tcp
+    state: present
+
+- name: Disable multipathd (conflicts with Longhorn iSCSI volume attachment)
+  ansible.builtin.systemd:
+    name: multipathd
+    enabled: false
+    state: stopped
+  ignore_errors: true
+
+- name: Verify iSCSI initiator name file exists
+  ansible.builtin.stat:
+    path: /etc/iscsi/initiatorname.iscsi
+  register: iscsi_initiator
+  failed_when: not iscsi_initiator.stat.exists

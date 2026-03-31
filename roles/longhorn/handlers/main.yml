@@ -1,0 +1,17 @@
+---
+- name: Restart K3s server
+  ansible.builtin.systemd:
+    name: k3s
+    state: restarted
+    daemon_reload: true
+
+- name: Wait for K3s API to be ready after restart
+  ansible.builtin.uri:
+    url: "https://localhost:6443/readyz"
+    validate_certs: false
+    status_code: [200, 401]
+  register: k3s_ready
+  until: k3s_ready.status in [200, 401]
+  retries: 24
+  delay: 5
+  listen: "Restart K3s server"
