@@ -1,10 +1,17 @@
 ---
+- name: Install Longhorn node prerequisites
+  hosts: cluster
+  become: true
+  roles:
+    - longhorn-prereqs
+
 - name: Install Host Tools
   hosts: servers
   become: true
   roles:
     - helm
     - cert-manager
+    - longhorn
     - traefik
     - static-site
 

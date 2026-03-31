@@ -1,0 +1,142 @@
+---
+- name: Longhorn PVC smoke test
+  hosts: servers
+  run_once: true
+  become: true
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  vars:
+    test_pvc: smoke-test-pvc
+    test_pod_writer: smoke-test-writer
+    test_pod_reader: smoke-test-reader
+    test_ns: default
+
+  tasks:
+    - name: Apply smoke test PVC
+      ansible.builtin.command: >
+        kubectl apply -f -
+      args:
+        stdin: |
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: {{ test_pvc }}
+            namespace: {{ test_ns }}
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 1Gi
+      changed_when: true
+
+    - name: Wait for PVC to be Bound
+      ansible.builtin.command: >
+        kubectl get pvc {{ test_pvc }} -n {{ test_ns }} -o jsonpath='{.status.phase}'
+      register: pvc_status
+      until: pvc_status.stdout == "Bound"
+      retries: 12
+      delay: 5
+      changed_when: false
+
+    - name: Apply writer pod
+      ansible.builtin.command: >
+        kubectl apply -f -
+      args:
+        stdin: |
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: {{ test_pod_writer }}
+            namespace: {{ test_ns }}
+          spec:
+            containers:
+              - name: writer
+                image: busybox
+                command: ["/bin/sh", "-c", "echo 'longhorn-persistence-test' > /data/testfile && sync && sleep 3600"]
+                volumeMounts:
+                  - name: data
+                    mountPath: /data
+            volumes:
+              - name: data
+                persistentVolumeClaim:
+                  claimName: {{ test_pvc }}
+            restartPolicy: Never
+      changed_when: true
+
+    - name: Wait for writer pod to be Running
+      ansible.builtin.command: >
+        kubectl get pod {{ test_pod_writer }} -n {{ test_ns }} -o jsonpath='{.status.phase}'
+      register: writer_phase
+      until: writer_phase.stdout == "Running"
+      retries: 24
+      delay: 5
+      changed_when: false
+
+    - name: Delete writer pod
+      ansible.builtin.command: >
+        kubectl delete pod {{ test_pod_writer }} -n {{ test_ns }} --wait=true
+      changed_when: true
+
+    - name: Apply reader pod
+      ansible.builtin.command: >
+        kubectl apply -f -
+      args:
+        stdin: |
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: {{ test_pod_reader }}
+            namespace: {{ test_ns }}
+          spec:
+            containers:
+              - name: reader
+                image: busybox
+                command: ["/bin/sh", "-c", "cat /data/testfile && sleep 10"]
+                volumeMounts:
+                  - name: data
+                    mountPath: /data
+            volumes:
+              - name: data
+                persistentVolumeClaim:
+                  claimName: {{ test_pvc }}
+            restartPolicy: Never
+      changed_when: true
+
+    - name: Wait for reader pod to complete
+      ansible.builtin.command: >
+        kubectl get pod {{ test_pod_reader }} -n {{ test_ns }} -o jsonpath='{.status.phase}'
+      register: reader_phase
+      until: reader_phase.stdout in ["Succeeded", "Failed"]
+      retries: 24
+      delay: 5
+      changed_when: false
+
+    - name: Read file content from reader pod logs
+      ansible.builtin.command: >
+        kubectl logs {{ test_pod_reader }} -n {{ test_ns }}
+      register: reader_logs
+      changed_when: false
+
+    - name: Assert data persisted
+      ansible.builtin.assert:
+        that:
+          - "'longhorn-persistence-test' in reader_logs.stdout"
+          - reader_phase.stdout == "Succeeded"
+        fail_msg: "Persistence test FAILED — expected 'longhorn-persistence-test' in output, got: {{ reader_logs.stdout }}"
+        success_msg: "Persistence test PASSED — data survived pod deletion and recreation"
+
+    - name: Cleanup test PVC and pods
+      ansible.builtin.command: >
+        kubectl delete pod {{ test_pod_writer }} {{ test_pod_reader }} pvc {{ test_pvc }}
+        -n {{ test_ns }} --ignore-not-found=true
+      changed_when: true
+
+    - name: Show StorageClass status
+      ansible.builtin.command: kubectl get storageclass
+      register: sc_out
+      changed_when: false
+
+    - name: Display StorageClass status
+      ansible.builtin.debug:
+        msg: "{{ sc_out.stdout_lines }}"

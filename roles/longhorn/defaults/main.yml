@@ -1,0 +1,4 @@
+---
+longhorn_version: "v1.11.1"
+longhorn_namespace: "longhorn-system"
+longhorn_data_path: "/var/lib/longhorn"

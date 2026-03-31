@@ -86,7 +86,7 @@
   tasks:
     - name: Install K3s server
       shell: |
-        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik --write-kubeconfig-mode 644 --flannel-iface={{ k3s_flannel_iface }}" sh -
+        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik --disable local-storage --write-kubeconfig-mode 644 --flannel-iface={{ k3s_flannel_iface }}" sh -
       args:
         creates: /etc/systemd/system/k3s.service
 
