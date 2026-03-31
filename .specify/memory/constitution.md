@@ -1,18 +1,16 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: [TEMPLATE] → 1.0.0 (initial); 1.0.0 → 1.0.1 (network topology); 1.0.1 → 1.1.0 (security hardening: principles VI + VII, IV expanded); 1.1.0 → 1.1.1 (topology refinement: edge VLAN, server/agent nomenclature, hardware corrections)
-Modified principles: N/A (initial ratification from template)
+Version change: 1.1.1 → 1.2.0
+Modified principles: N/A
 Added sections:
-  - Core Principles (5 principles)
-  - Technology Stack
-  - Deployment Workflow
-  - Governance
+  - Principle VIII: Persistent Storage (new)
+  - Technology Stack: added Longhorn entry
 Removed sections: N/A
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ — Constitution Check gates align with principles below
   - .specify/templates/spec-template.md ✅ — No mandatory sections added/removed; existing structure fits
-  - .specify/templates/tasks-template.md ✅ — Task categories (idempotency checks, validation, secrets) reflected
+  - .specify/templates/tasks-template.md ✅ — Task categories now include storage claim validation
   - .specify/templates/agent-file-template.md ✅ — No principle-named references; generic structure unchanged
   - .specify/templates/constitution-template.md ✅ — Source template; no changes required
 Deferred TODOs: None — all placeholders resolved.
@@ -104,6 +102,22 @@ boundary limits the blast radius of a compromised device.
 revocation explicit and auditable. Narrow firewall rules contain lateral movement if a
 device is compromised.
 
+### VIII. Persistent Storage
+
+All cluster services requiring durable storage MUST use Longhorn-backed
+`PersistentVolumeClaim` resources. Specifically:
+
+- PVCs MUST reference the `longhorn` StorageClass (the cluster default)
+- `hostPath` volumes and `emptyDir` MUST NOT be used for stateful workloads; they are
+  permitted only for ephemeral scratch space or read-only config mounts
+- Volume size requests MUST be explicit; `storage: ""` or unbounded claims are not permitted
+- Helm chart values that expose a `storageClass` parameter MUST set it to `longhorn`
+  explicitly rather than relying on the cluster default, to make the dependency auditable
+
+**Rationale**: Longhorn provides replicated, node-failure-tolerant block storage backed by
+each node's local NVMe. Using it consistently for all stateful workloads ensures data
+survives single-node failures and keeps storage configuration observable in the repository.
+
 ## Technology Stack
 
 The canonical technology choices for this project are:
@@ -111,6 +125,9 @@ The canonical technology choices for this project are:
 - **Orchestration**: K3s (lightweight Kubernetes) on Raspberry Pi OS (Debian-based, arm64)
 - **Automation**: Ansible — playbooks at repository root, roles in `roles/`
 - **Package management**: Helm — charts managed via `roles/helm/` and `services-deploy.yml`
+- **Storage**: Longhorn v1.11.1 — distributed block storage using the `longhorn` StorageClass;
+  data stored at `/var/lib/longhorn` on each node's local NVMe disk; installed via
+  `https://charts.longhorn.io`; requires `open-iscsi` and `nfs-common` on all nodes
 - **Hardware**:
   - Cluster nodes: Raspberry Pi CM5 (64 GB) with PoE HAT and M.2 2TB NVMe storage
   - Edge device: Waveshare CM5-PoE-BASE-A (Raspberry Pi CM5, arm64 Debian-based)
@@ -155,7 +172,7 @@ This constitution supersedes all informal practices. Amendments require:
 3. `LAST_AMENDED_DATE` updated to the date of the commit.
 
 All playbook PRs/reviews MUST verify compliance with the principles above, particularly
-Idempotency (II) and Secrets Hygiene (IV). Complexity violations MUST be justified in the
-PR description before merging.
+Idempotency (II), Secrets Hygiene (IV), and Persistent Storage (VIII). Complexity violations
+MUST be justified in the PR description before merging.
 
-**Version**: 1.1.1 | **Ratified**: 2026-03-27 | **Last Amended**: 2026-03-29
+**Version**: 1.2.0 | **Ratified**: 2026-03-27 | **Last Amended**: 2026-03-31
