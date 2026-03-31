@@ -1,0 +1,44 @@
+# ArgoCD Application Contract
+# ============================
+# This file documents the schema used to register a new service for GitOps management.
+# Copy this template and fill in the fields marked with <angle brackets>.
+# Apply via the argocd-bootstrap Ansible role (add an entry to argocd_apps in group_vars).
+#
+# Constitution Principle I: All application definitions MUST live in this repository
+# and be applied via Ansible — never created manually in the ArgoCD UI.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: <app-name>                    # unique name, kebab-case, e.g. "my-service"
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io  # ensures resources are cleaned up on delete
+spec:
+  project: default
+
+  source:
+    repoURL: <gitea-repo-url>         # e.g. https://gitea.vanlab.local/<org>/<repo>
+    targetRevision: main              # branch, tag, or commit SHA to track
+    path: <path-in-repo>             # path within the repo containing the manifests/chart
+    # If the path contains a Helm chart, add:
+    # helm:
+    #   valueFiles:
+    #     - values.yaml
+
+  destination:
+    server: https://kubernetes.default.svc   # always in-cluster
+    namespace: <target-namespace>     # namespace where resources will be deployed
+
+  syncPolicy:
+    automated:
+      prune: true                     # remove resources deleted from Git
+      selfHeal: true                  # re-sync if cluster drifts from Git
+    syncOptions:
+      - CreateNamespace=true          # auto-create namespace if it doesn't exist
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
