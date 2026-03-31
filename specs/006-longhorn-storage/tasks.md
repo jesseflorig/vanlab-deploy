@@ -57,7 +57,7 @@
 
 ### Implementation for User Story 2
 
-- [ ] T009 [US2] Run PVC smoke test per quickstart.md Step 3–4: apply test PVC + pod, wait for PVC Bound, write file, delete pod, recreate pod, verify file persists; clean up PVC and pod. Document any issues.
+- [x] T009 [US2] Run PVC smoke test per quickstart.md Step 3–4: apply test PVC + pod, wait for PVC Bound, write file, delete pod, recreate pod, verify file persists; clean up PVC and pod. Document any issues.
 
 **Checkpoint**: PVC provisions, data persists across pod reschedule, cleanup leaves no orphaned volumes.
 
@@ -65,8 +65,8 @@
 
 ## Phase 5: Polish & Cross-Cutting Concerns
 
-- [ ] T010 Idempotency: re-run `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --ask-become-pass` and confirm changed=0 for all Longhorn tasks
-- [ ] T011 Access Longhorn dashboard via port-forward per quickstart.md Step 6 and confirm all nodes show as schedulable with available storage capacity
+- [x] T010 Idempotency: re-run `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --ask-become-pass` and confirm changed=0 for all Longhorn tasks
+- [x] T011 Access Longhorn dashboard via port-forward per quickstart.md Step 6 and confirm all nodes show as schedulable with available storage capacity
 
 ---
 
