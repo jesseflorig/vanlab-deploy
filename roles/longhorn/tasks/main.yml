@@ -69,15 +69,6 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   changed_when: false
 
-- name: Wait for longhorn-csi-plugin DaemonSet rollout
-  ansible.builtin.command: >
-    kubectl rollout status daemonset/longhorn-csi-plugin
-    -n {{ longhorn_namespace }}
-    --timeout=10m
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-  changed_when: false
-
 - name: Wait for longhorn-ui Deployment rollout
   ansible.builtin.command: >
     kubectl rollout status deployment/longhorn-ui
@@ -96,6 +87,21 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   changed_when: false
 
+# CSI components are created by longhorn-driver-deployer after it runs.
+# Retry with delay to handle NotFound until resources are created.
+- name: Wait for longhorn-csi-plugin DaemonSet rollout
+  ansible.builtin.command: >
+    kubectl rollout status daemonset/longhorn-csi-plugin
+    -n {{ longhorn_namespace }}
+    --timeout=5m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: csi_plugin_rollout
+  changed_when: false
+  until: csi_plugin_rollout.rc == 0
+  retries: 12
+  delay: 15
+
 - name: Wait for csi-attacher Deployment rollout
   ansible.builtin.command: >
     kubectl rollout status deployment/csi-attacher
@@ -103,7 +109,11 @@
     --timeout=5m
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: csi_attacher_rollout
   changed_when: false
+  until: csi_attacher_rollout.rc == 0
+  retries: 12
+  delay: 15
 
 - name: Wait for csi-provisioner Deployment rollout
   ansible.builtin.command: >
@@ -112,7 +122,11 @@
     --timeout=5m
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: csi_provisioner_rollout
   changed_when: false
+  until: csi_provisioner_rollout.rc == 0
+  retries: 12
+  delay: 15
 
 - name: Display Longhorn storage node count
   ansible.builtin.command: >
