@@ -52,22 +52,54 @@ playbooks/
 
 | Group | Members | Notes |
 |-------|---------|-------|
-| `servers` | node1, node2 | K3s server nodes (10.1.20.11–.12) |
-| `agents` | node3, node4 | K3s agent nodes (10.1.20.13–.14) |
+| `servers` | node1, node3 | K3s control-plane + etcd nodes (10.1.20.11, .13) |
+| `agents` | node2, node4 | K3s worker nodes (10.1.20.12, .14) |
 | `cluster` | servers + agents | Full K3s cluster |
 | `compute` | edge | CM5 Cloudflared device (10.1.10.x) |
 
 OPNsense (10.1.1.1) and unmanaged switches are documented as topology comments in `hosts.ini` — managed via `network-deploy.yml` using the `oxlorg.opnsense` REST API collection.
 
-## Known Issue
+### etcd Topology
 
-Current playbook does not allow agents to join the cluster properly. Manual steps:
+The cluster uses K3s embedded etcd. Server count **must be odd** (1, 3, or 5) for quorum:
 
-1. Stop the K3S agent if running: `sudo systemctl stop k3s-agent`
-2. Uninstall K3S: `sudo k3s-killall.sh` then `sudo rm -rf /var/lib/rancher/k3s /var/lib/kubelet /etc/rancher/k3s`
-3. Reboot: `sudo reboot now`
-4. Run install and join command (replacing `[MASTER_IP]` and `[JOIN_TOKEN]`):
-   `curl -sfL https://get.k3s.io | K3S_URL=https://[MASTER_IP]:6443 K3S_TOKEN=[JOIN_TOKEN] sh -`
+| Servers | Fault tolerance |
+|---------|----------------|
+| 1 | None — any failure = cluster down |
+| 3 | 1 node |
+| 5 | 2 nodes |
+
+The first entry in `[servers]` initializes the etcd cluster (`--cluster-init`). Additional entries join the quorum automatically on the next `k3s-deploy.yml` run.
+
+### Promoting a node from agent to server
+
+1. Move the node from `[agents]` to `[servers]` in `hosts.ini`
+2. Uninstall the agent: `ansible <node> -i hosts.ini -m shell -a "k3s-agent-uninstall.sh" --become`
+3. Re-run: `ansible-playbook -i hosts.ini playbooks/cluster/k3s-deploy.yml`
+4. Verify: `kubectl get nodes` — promoted node shows `control-plane,etcd` role
+
+## Cluster Rebuild (etcd Migration)
+
+A full rebuild is required when migrating datastores or recovering from total cluster loss. All Longhorn PVC data is lost — ensure the Gitea repo is up to date before starting (ArgoCD restores apps automatically).
+
+```bash
+# 1. Uninstall agents
+ansible agents -i hosts.ini -m shell -a "k3s-agent-uninstall.sh" --become
+
+# 2. Uninstall server(s)
+ansible servers -i hosts.ini -m shell -a "k3s-uninstall.sh" --become
+
+# 3. Deploy etcd-backed cluster (~3 min)
+ansible-playbook -i hosts.ini playbooks/cluster/k3s-deploy.yml
+
+# 4. Deploy all services (~10 min, includes cert issuance)
+ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml
+
+# 5. Bootstrap GitOps (after creating a new Gitea PAT in group_vars/all.yml)
+ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags argocd-bootstrap
+```
+
+Total rebuild time: ~15–20 minutes. ArgoCD syncs apps from Gitea automatically within 3 minutes of coming online.
 
 ## GitOps
 
@@ -97,7 +129,7 @@ The cluster runs ArgoCD backed by a self-hosted Gitea instance for fully declara
    ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --ask-become-pass
    ```
 
-3. Access the dashboards at `https://gitea.vanlab.local` and `https://argocd.vanlab.local`.
+3. Access the dashboards at `https://gitea.fleet1.cloud` and `https://argocd.fleet1.cloud`.
 
 ### Registering a new application
 
@@ -140,7 +172,3 @@ Verify the full GitOps stack is healthy after deployment:
 ansible-playbook -i hosts.ini playbooks/cluster/argocd-smoke-test.yml --ask-become-pass
 ```
 
-## Todo
-
-- [ ] Fix worker node joining in playbook
-- [ ] Migrate to Pi ComputeBlades with AI expansion board
