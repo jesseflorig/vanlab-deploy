@@ -1,0 +1,17 @@
+---
+# kube-prometheus-stack role defaults
+monitoring_namespace: monitoring
+prometheus_stack_release: kube-prometheus-stack
+prometheus_stack_chart_version: "75.2.0"
+
+# Storage (Longhorn-backed)
+prometheus_storage_size: 20Gi
+grafana_storage_size: 5Gi
+alertmanager_storage_size: 5Gi
+
+# Hostnames — override in group_vars/all.yml
+grafana_hostname: "grafana.fleet1.cloud"
+prometheus_hostname: "prometheus.fleet1.cloud"
+
+# Grafana admin password — MUST be set in group_vars/all.yml
+grafana_admin_password: ""

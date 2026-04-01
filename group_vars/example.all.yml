@@ -23,6 +23,11 @@ opnsense_api_secret: <OPNSENSE_API_SECRET>
 cloudflare_api_token: <CLOUDFLARE_API_TOKEN_WITH_DNS_EDIT_PERMISSION>
 acme_email: <YOUR_EMAIL_FOR_LETSENCRYPT_EXPIRY_NOTICES>
 
+# Grafana + Prometheus (used by services-deploy.yml → kube-prometheus-stack role)
+grafana_admin_password: <GRAFANA_ADMIN_PASSWORD>
+grafana_hostname: grafana.fleet1.cloud
+prometheus_hostname: prometheus.fleet1.cloud
+
 # Gitea admin account (used by services-deploy.yml → gitea role)
 gitea_admin_username: <GITEA_ADMIN_USERNAME>
 gitea_admin_password: <GITEA_ADMIN_PASSWORD>
