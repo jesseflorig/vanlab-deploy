@@ -9,6 +9,8 @@ Auto-generated from all feature plans. Last updated: 2026-04-01
 - Longhorn itself — uses `/var/lib/longhorn` on each node's local NVMe disk (006-longhorn-storage)
 - YAML (Ansible 2.x) — existing project conventions + K3s (already installed), embedded etcd (bundled with K3s — no separate install) (008-etcd-cluster-backend)
 - N/A — etcd state stored at `/var/lib/rancher/k3s/server/db/` on server nodes (008-etcd-cluster-backend)
+- YAML (Ansible 2.x) — existing project conventions + `prometheus-community/kube-prometheus-stack` Helm chart; Longhorn (already deployed) (009-prometheus-longhorn-monitoring)
+- Longhorn `storageClassName: longhorn` — Prometheus 20Gi, Grafana 5Gi, Alertmanager 5Gi (009-prometheus-longhorn-monitoring)
 
 - YAML (Ansible 2.x) — follows existing project conventions + `smartmontools` (apt) — installed idempotently by the playbook as a (001-node-disk-health)
 
@@ -28,9 +30,9 @@ tests/
 YAML (Ansible 2.x) — follows existing project conventions: Follow standard conventions
 
 ## Recent Changes
+- 009-prometheus-longhorn-monitoring: Added YAML (Ansible 2.x) — existing project conventions + `prometheus-community/kube-prometheus-stack` Helm chart; Longhorn (already deployed)
 - 008-etcd-cluster-backend: Added YAML (Ansible 2.x) — existing project conventions + K3s (already installed), embedded etcd (bundled with K3s — no separate install)
 - 005-argocd-gitops: Added [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
-- 006-longhorn-storage: Added YAML (Ansible 2.x) — existing project conventions + Longhorn Helm chart v1.11.1 (`https://charts.longhorn.io`), open-iscsi, nfs-common
 
 
 <!-- MANUAL ADDITIONS START -->
