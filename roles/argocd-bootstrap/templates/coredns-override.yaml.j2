@@ -5,7 +5,4 @@ metadata:
   namespace: kube-system
 data:
   gitea.override: |
-    hosts {
-      {{ gitea_node_ip }} {{ gitea_hostname }}
-      fallthrough
-    }
+    rewrite name exact {{ gitea_hostname }} node1

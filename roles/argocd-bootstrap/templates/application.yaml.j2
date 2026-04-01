@@ -8,7 +8,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: "https://{{ gitea_hostname }}/{{ item.repo }}"
+    repoURL: "https://{{ gitea_hostname }}:{{ gitea_internal_port }}/{{ item.repo }}"
     targetRevision: "{{ item.revision | default('main') }}"
     path: "{{ item.path | default('.') }}"
   destination:

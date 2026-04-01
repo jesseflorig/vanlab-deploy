@@ -33,18 +33,13 @@ gitea_argocd_token: <GITEA_ARGOCD_PAT_TOKEN>
 # ArgoCD applications (used by services-deploy.yml → argocd-bootstrap role)
 # Each entry registers a GitOps app synced from the vanlab repo in Gitea
 argocd_apps:
-  - name: whoami
-    repo: gitadmin/vanlab
-    path: manifests/whoami
-    namespace: whoami
-    revision: main
   - name: static-site
-    repo: gitadmin/vanlab
+    repo: gitadmin/vanlab.git
     path: manifests/static-site
     namespace: static-site
     revision: main
   - name: redirects
-    repo: gitadmin/vanlab
+    repo: gitadmin/vanlab.git
     path: manifests/redirects
     namespace: traefik
     revision: main
