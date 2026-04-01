@@ -1,0 +1,63 @@
+---
+# Deploy Gitea self-hosted Git service on K3s via Helm.
+# Uses SQLite for simplicity, Longhorn PVC for persistence, and Traefik + cert-manager for HTTPS.
+
+- name: Add Gitea Helm repo
+  ansible.builtin.command: helm repo add gitea-charts https://dl.gitea.com/charts/
+  register: helm_repo_add
+  changed_when: "'has been added' in helm_repo_add.stdout"
+  failed_when:
+    - helm_repo_add.rc != 0
+    - "'already exists' not in helm_repo_add.stderr | lower"
+
+- name: Update Helm repos
+  ansible.builtin.command: helm repo update
+  changed_when: false
+
+- name: Create gitea namespace (idempotent)
+  ansible.builtin.shell: >
+    kubectl create namespace {{ gitea_namespace }} --dry-run=client -o yaml | kubectl apply -f -
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+
+- name: Render Gitea Helm values template
+  ansible.builtin.template:
+    src: values.yaml.j2
+    dest: /tmp/gitea-values.yaml
+    mode: "0644"
+
+- name: Install Gitea via Helm
+  ansible.builtin.command: >
+    helm upgrade --install gitea gitea-charts/gitea
+    --namespace {{ gitea_namespace }}
+    --version {{ gitea_version }}
+    --values /tmp/gitea-values.yaml
+    --atomic
+    --timeout 5m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: gitea_install
+  changed_when: "'has been deployed' in gitea_install.stdout or 'has been upgraded' in gitea_install.stdout"
+
+- name: Wait for Gitea Deployment rollout
+  ansible.builtin.command: >
+    kubectl rollout status deployment/gitea
+    -n {{ gitea_namespace }}
+    --timeout=5m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+
+- name: Verify Gitea PVC is Bound
+  ansible.builtin.command: >
+    kubectl get pvc gitea-shared-storage -n {{ gitea_namespace }} -o jsonpath='{.status.phase}'
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: gitea_pvc_status
+  changed_when: false
+  failed_when: gitea_pvc_status.stdout != "Bound"
+
+- name: Display Gitea deployment summary
+  ansible.builtin.debug:
+    msg: "Gitea is running — add DNS A record for {{ gitea_hostname }} → {{ ansible_host }} to enable HTTPS access"

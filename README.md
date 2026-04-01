@@ -69,6 +69,77 @@ Current playbook does not allow agents to join the cluster properly. Manual step
 4. Run install and join command (replacing `[MASTER_IP]` and `[JOIN_TOKEN]`):
    `curl -sfL https://get.k3s.io | K3S_URL=https://[MASTER_IP]:6443 K3S_TOKEN=[JOIN_TOKEN] sh -`
 
+## GitOps
+
+The cluster runs ArgoCD backed by a self-hosted Gitea instance for fully declarative application delivery.
+
+### Deployment workflow
+
+1. Add Gitea and ArgoCD secret values to `group_vars/all.yml`:
+
+   ```yaml
+   gitea_admin_username: admin
+   gitea_admin_password: <password>
+   gitea_admin_email: <email>
+   argocd_admin_password_bcrypt: <bcrypt-hash>
+   gitea_argocd_token: <gitea-pat>
+   ```
+
+   Generate the ArgoCD bcrypt hash:
+
+   ```bash
+   htpasswd -nbBC 10 "" <password> | tr -d ':\n' | sed 's/$2y/$2a/'
+   ```
+
+2. Run the full services playbook:
+
+   ```bash
+   ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --ask-become-pass
+   ```
+
+3. Access the dashboards at `https://gitea.vanlab.local` and `https://argocd.vanlab.local`.
+
+### Registering a new application
+
+Add an entry to `argocd_apps` in `group_vars/all.yml`:
+
+```yaml
+argocd_apps:
+  - name: my-service
+    repo: org/repo          # Gitea org/repo path
+    path: .                 # path within the repo containing manifests or Helm chart
+    namespace: my-service   # destination namespace
+    revision: main          # branch, tag, or commit SHA
+```
+
+Then re-run only the bootstrap role:
+
+```bash
+ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags argocd-bootstrap --ask-become-pass
+```
+
+### Rollback procedure
+
+ArgoCD continuously reconciles the cluster to match the desired state in Gitea. To roll back a bad deployment:
+
+1. Revert the commit in Gitea (via the Gitea web UI or `git revert` + push).
+2. ArgoCD detects the change and automatically re-syncs within 3 minutes.
+3. Verify the application returns to `Synced/Healthy`:
+
+   ```bash
+   kubectl get applications -n argocd
+   ```
+
+No direct `kubectl` intervention is required — the Git history is the source of truth.
+
+### Smoke test
+
+Verify the full GitOps stack is healthy after deployment:
+
+```bash
+ansible-playbook -i hosts.ini playbooks/cluster/argocd-smoke-test.yml --ask-become-pass
+```
+
 ## Todo
 
 - [ ] Fix worker node joining in playbook

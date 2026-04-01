@@ -29,6 +29,14 @@ providers:
   kubernetesIngress:
     enabled: true
 
+additionalArguments:
+  - "--serversTransport.insecureSkipVerify=true"
+
+tlsStore:
+  default:
+    defaultCertificate:
+      secretName: fleet1-cloud-tls
+
 logs:
   access:
     enabled: true

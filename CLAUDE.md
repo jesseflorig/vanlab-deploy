@@ -26,9 +26,9 @@ tests/
 YAML (Ansible 2.x) — follows existing project conventions: Follow standard conventions
 
 ## Recent Changes
+- 005-argocd-gitops: Added [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
 - 006-longhorn-storage: Added YAML (Ansible 2.x) — existing project conventions + Longhorn Helm chart v1.11.1 (`https://charts.longhorn.io`), open-iscsi, nfs-common
 - 004-static-site-tls: Added YAML (Ansible 2.x) — existing project conventions
-- 003-cluster-tunnel-expose: Added YAML (Ansible 2.x) — existing project conventions
 
 
 <!-- MANUAL ADDITIONS START -->

@@ -1,0 +1,7 @@
+---
+argocd_namespace: "argocd"
+gitea_hostname: "gitea.fleet1.cloud"
+gitea_node_ip: "10.1.20.11"
+gitea_internal_port: 30443
+gitea_argocd_token: ""
+argocd_apps: []

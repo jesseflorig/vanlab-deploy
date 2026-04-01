@@ -1,0 +1,6 @@
+---
+gitea_version: "10.3.0"
+gitea_namespace: "gitea"
+gitea_hostname: "gitea.fleet1.cloud"
+gitea_pvc_size: "10Gi"
+gitea_storage_class: "longhorn"

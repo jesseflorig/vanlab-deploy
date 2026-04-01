@@ -1,0 +1,48 @@
+gitea:
+  admin:
+    username: "{{ gitea_admin_username }}"
+    password: "{{ gitea_admin_password }}"
+    email: "{{ gitea_admin_email }}"
+  config:
+    database:
+      DB_TYPE: sqlite3
+    server:
+      DOMAIN: "{{ gitea_hostname }}"
+      ROOT_URL: "https://{{ gitea_hostname }}"
+
+# Disable PostgreSQL and Redis subcharts — using SQLite
+postgresql-ha:
+  enabled: false
+postgresql:
+  enabled: false
+redis-cluster:
+  enabled: false
+redis:
+  enabled: false
+
+persistence:
+  enabled: true
+  storageClass: "{{ gitea_storage_class }}"
+  size: "{{ gitea_pvc_size }}"
+  accessModes:
+    - ReadWriteOnce
+
+ingress:
+  enabled: true
+  ingressClassName: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+  hosts:
+    - host: "{{ gitea_hostname }}"
+      paths:
+        - path: /
+          pathType: Prefix
+
+service:
+  http:
+    type: ClusterIP
+    port: 3000
+  ssh:
+    type: ClusterIP
+    port: 22

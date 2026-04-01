@@ -1,0 +1,4 @@
+---
+argocd_chart_version: "7.8.26"
+argocd_namespace: "argocd"
+argocd_hostname: "argocd.fleet1.cloud"
