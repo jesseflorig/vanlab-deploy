@@ -10,10 +10,12 @@
   failed_when:
     - helm_repo_add.rc != 0
     - "'already exists' not in helm_repo_add.stderr | lower"
+  run_once: true
 
 - name: Update Helm repos
   ansible.builtin.command: helm repo update
   changed_when: false
+  run_once: true
 
 - name: Create argocd namespace (idempotent)
   ansible.builtin.shell: >
@@ -21,12 +23,14 @@
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   changed_when: false
+  run_once: true
 
 - name: Render ArgoCD ServersTransport manifest
   ansible.builtin.template:
     src: servers-transport.yaml.j2
     dest: /tmp/argocd-servers-transport.yaml
     mode: "0644"
+  run_once: true
 
 - name: Apply ArgoCD ServersTransport
   ansible.builtin.command: kubectl apply -f /tmp/argocd-servers-transport.yaml
@@ -34,12 +38,14 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: st_apply
   changed_when: "'configured' in st_apply.stdout or 'created' in st_apply.stdout"
+  run_once: true
 
 - name: Render ArgoCD Helm values template
   ansible.builtin.template:
     src: values.yaml.j2
     dest: /tmp/argocd-values.yaml
     mode: "0644"
+  run_once: true
 
 - name: Install ArgoCD via Helm
   ansible.builtin.command: >
@@ -53,6 +59,7 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: argocd_install
   changed_when: "'has been deployed' in argocd_install.stdout or 'has been upgraded' in argocd_install.stdout"
+  run_once: true
 
 - name: Wait for argocd-server Deployment rollout
   ansible.builtin.command: >
@@ -62,6 +69,7 @@
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   changed_when: false
+  run_once: true
 
 - name: Wait for argocd-repo-server Deployment rollout
   ansible.builtin.command: >
@@ -71,6 +79,7 @@
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   changed_when: false
+  run_once: true
 
 - name: Wait for argocd-application-controller StatefulSet rollout
   ansible.builtin.command: >
@@ -80,7 +89,9 @@
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   changed_when: false
+  run_once: true
 
 - name: Display ArgoCD deployment summary
   ansible.builtin.debug:
     msg: "ArgoCD dashboard: https://{{ argocd_hostname }} — log in with admin / <password from all.yml>"
+  run_once: true
