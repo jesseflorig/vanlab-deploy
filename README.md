@@ -125,6 +125,30 @@ Every new Traefik ingress needs a matching public hostname rule in Cloudflare Ze
 
 The cluster runs ArgoCD backed by a self-hosted Gitea instance for fully declarative application delivery.
 
+### Infrastructure vs application workloads
+
+Not everything in the cluster is ArgoCD-managed. The boundary is defined by **bootstrap ordering**: ArgoCD needs certain services running before it can sync anything, so those services must be Ansible-managed.
+
+**Ansible/Helm-managed (infrastructure) — never migrate to ArgoCD:**
+
+| Service | Reason |
+|---------|--------|
+| Traefik | Ingress controller — must exist before any service is reachable |
+| cert-manager | PKI — TLS certs must exist before services can come up |
+| Longhorn | Storage — PVCs must exist before stateful workloads can start |
+| Gitea | ArgoCD's source-of-truth — can't sync from Gitea if Gitea isn't running |
+| ArgoCD | The GitOps controller itself — can't manage its own bootstrap |
+| kube-prometheus-stack | Cluster observability infrastructure — same category as Traefik/Longhorn |
+
+**ArgoCD-managed (application workloads) — all new apps go here:**
+
+| App | Manifests |
+|-----|-----------|
+| static-site | `manifests/static-site/` |
+| redirects | `manifests/redirects/` |
+
+The rule of thumb: if the cluster can't function or recover without it, it's infrastructure. If it's a workload that runs *on top of* the cluster, it's an application and belongs in `manifests/` under ArgoCD.
+
 ### Deployment workflow
 
 1. Add Gitea and ArgoCD secret values to `group_vars/all.yml`:
