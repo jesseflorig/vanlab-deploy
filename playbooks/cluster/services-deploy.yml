@@ -12,6 +12,8 @@
     - helm
     - cert-manager
     - longhorn
+    - role: kube-prometheus-stack
+      tags: [monitoring]
     - traefik
     - static-site
     - role: gitea

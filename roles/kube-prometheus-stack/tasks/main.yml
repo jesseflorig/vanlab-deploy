@@ -1,0 +1,68 @@
+---
+# kube-prometheus-stack role — deploys Prometheus, Grafana, Alertmanager, and node-exporter
+# via the prometheus-community Helm chart with K3s-compatible settings.
+
+- name: Add prometheus-community Helm repo
+  ansible.builtin.command:
+    cmd: helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: repo_add
+  changed_when: "'already exists' not in repo_add.stderr"
+  failed_when: repo_add.rc != 0 and 'already exists' not in repo_add.stderr
+  run_once: true
+
+- name: Update Helm repos
+  ansible.builtin.command:
+    cmd: helm repo update
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: true
+  run_once: true
+
+- name: Create monitoring namespace (idempotent)
+  ansible.builtin.shell: |
+    kubectl create namespace {{ monitoring_namespace }} --dry-run=client -o yaml | kubectl apply -f -
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: ns_result
+  changed_when: "'created' in ns_result.stdout"
+  run_once: true
+
+- name: Render kube-prometheus-stack Helm values
+  ansible.builtin.template:
+    src: values.yaml.j2
+    dest: /tmp/prometheus-stack-values.yaml
+    mode: "0644"
+  run_once: true
+
+- name: Install kube-prometheus-stack via Helm
+  ansible.builtin.command:
+    cmd: >
+      helm upgrade --install {{ prometheus_stack_release }}
+      prometheus-community/kube-prometheus-stack
+      --namespace {{ monitoring_namespace }}
+      --version {{ prometheus_stack_chart_version }}
+      --values /tmp/prometheus-stack-values.yaml
+      --atomic
+      --timeout 10m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: helm_result
+  changed_when: "'has been upgraded' in helm_result.stdout or 'has been deployed' in helm_result.stdout"
+  run_once: true
+
+- name: Wait for Prometheus stack rollout
+  ansible.builtin.command:
+    cmd: kubectl rollout status deployment/{{ prometheus_stack_release }}-grafana -n {{ monitoring_namespace }} --timeout=300s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+- name: Display monitoring deployment summary
+  ansible.builtin.debug:
+    msg:
+      - "Grafana:    https://{{ grafana_hostname }}"
+      - "Prometheus: https://{{ prometheus_hostname }}"
+  run_once: true

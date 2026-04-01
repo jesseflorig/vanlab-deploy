@@ -1,0 +1,76 @@
+# kube-prometheus-stack Helm values — K3s arm64 homelab
+# Managed by Ansible — do not edit manually
+
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: {{ prometheus_storage_size }}
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      traefik.ingress.kubernetes.io/router.tls: "true"
+    hosts:
+      - "{{ prometheus_hostname }}"
+
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: {{ alertmanager_storage_size }}
+
+grafana:
+  adminPassword: "{{ grafana_admin_password }}"
+  persistence:
+    enabled: true
+    storageClassName: longhorn
+    size: {{ grafana_storage_size }}
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      traefik.ingress.kubernetes.io/router.tls: "true"
+    hosts:
+      - "{{ grafana_hostname }}"
+  dashboards:
+    default:
+      longhorn:
+        gnetId: 13032
+        revision: 6
+        datasource: Prometheus
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: default
+          orgId: 1
+          folder: ""
+          type: file
+          disableDeletion: false
+          options:
+            path: /var/lib/grafana/dashboards/default
+
+# Disable K3s unavailable control-plane scrapers
+# K3s embeds these in the kubelet process — standard metrics ports not exposed
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false

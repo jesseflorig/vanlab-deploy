@@ -101,6 +101,26 @@ ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags argoc
 
 Total rebuild time: ~15–20 minutes. ArgoCD syncs apps from Gitea automatically within 3 minutes of coming online.
 
+## Exposing a New Service via Cloudflare Tunnel
+
+Every new Traefik ingress needs a matching public hostname rule in Cloudflare Zero Trust before it's reachable externally.
+
+1. **Traefik ingress** — add annotations to route via the `websecure` entrypoint:
+   ```yaml
+   traefik.ingress.kubernetes.io/router.entrypoints: websecure
+   traefik.ingress.kubernetes.io/router.tls: "true"
+   ```
+
+2. **Cloudflare Zero Trust → Tunnels → Public Hostnames** — add a rule:
+   - **Subdomain**: the new subdomain (e.g. `grafana`)
+   - **Domain**: `fleet1.cloud`
+   - **Service**: `https://10.1.20.11:30443`
+   - **TLS → Origin Server Name**: the full hostname (e.g. `grafana.fleet1.cloud`)
+
+   Creating the public hostname rule automatically creates the Cloudflare DNS CNAME. **Do not create the CNAME manually first** — the rule creation will fail if the DNS record already exists.
+
+   Setting the origin server name lets cloudflared send the correct SNI during the TLS handshake with Traefik, allowing the wildcard cert (`*.fleet1.cloud`) to verify cleanly. Do **not** use "No TLS Verify" — that bypasses certificate validation entirely.
+
 ## GitOps
 
 The cluster runs ArgoCD backed by a self-hosted Gitea instance for fully declarative application delivery.
