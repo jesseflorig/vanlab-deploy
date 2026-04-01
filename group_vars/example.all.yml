@@ -16,3 +16,16 @@ opnsense_api_secret: <OPNSENSE_API_SECRET>
 # Token requires: Zone → DNS → Edit, Zone → Zone → Read for fleet1.cloud
 cloudflare_api_token: <CLOUDFLARE_API_TOKEN_WITH_DNS_EDIT_PERMISSION>
 acme_email: <YOUR_EMAIL_FOR_LETSENCRYPT_EXPIRY_NOTICES>
+
+# Gitea admin account (used by services-deploy.yml → gitea role)
+gitea_admin_username: <GITEA_ADMIN_USERNAME>
+gitea_admin_password: <GITEA_ADMIN_PASSWORD>
+gitea_admin_email: <GITEA_ADMIN_EMAIL>
+
+# ArgoCD admin password hash (used by services-deploy.yml → argocd role)
+# Generate with: htpasswd -nbBC 10 "" <password> | tr -d ':\n' | sed 's/$2y/$2a/'
+argocd_admin_password_bcrypt: <ARGOCD_ADMIN_PASSWORD_BCRYPT_HASH>
+
+# Gitea PAT for ArgoCD repository access (used by services-deploy.yml → argocd-bootstrap role)
+# Create a Gitea PAT with read:repository scope for the argocd user
+gitea_argocd_token: <GITEA_ARGOCD_PAT_TOKEN>

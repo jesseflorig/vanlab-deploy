@@ -1,0 +1,29 @@
+configs:
+  secret:
+    argocdServerAdminPassword: "{{ argocd_admin_password_bcrypt }}"
+
+server:
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hostname: "{{ argocd_hostname }}"
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      traefik.ingress.kubernetes.io/router.tls: "true"
+      traefik.ingress.kubernetes.io/service.serversscheme: https
+      traefik.ingress.kubernetes.io/service.serverstransport: argocd-skip-verify@kubernetescrd
+
+dex:
+  enabled: false
+
+redis-ha:
+  enabled: false
+
+controller:
+  replicas: 1
+
+repoServer:
+  replicas: 1
+
+applicationSet:
+  replicas: 1

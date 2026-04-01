@@ -1,0 +1,72 @@
+---
+# Bootstrap ArgoCD with Gitea repository credentials and seed Application definitions.
+# Skips entirely if gitea_argocd_token is not set. Re-run with --tags argocd-bootstrap
+# to register new apps without redeploying the full services stack.
+
+- name: Warn and skip if gitea_argocd_token is not set
+  ansible.builtin.debug:
+    msg: >
+      gitea_argocd_token is not set — skipping argocd-bootstrap.
+      Set gitea_argocd_token in group_vars/all.yml and re-run with --tags argocd-bootstrap.
+  when: gitea_argocd_token == ""
+
+- name: End play if gitea_argocd_token is not set
+  ansible.builtin.meta: end_play
+  when: gitea_argocd_token == ""
+
+- name: Render CoreDNS override for internal Gitea resolution
+  ansible.builtin.template:
+    src: coredns-override.yaml.j2
+    dest: /tmp/coredns-override.yaml
+    mode: "0644"
+
+- name: Apply CoreDNS override
+  ansible.builtin.command: kubectl apply -f /tmp/coredns-override.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: coredns_apply
+  changed_when: "'configured' in coredns_apply.stdout or 'created' in coredns_apply.stdout"
+
+- name: Restart CoreDNS to pick up override
+  ansible.builtin.command: >
+    kubectl rollout restart deployment/coredns -n kube-system
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  when: coredns_apply.changed
+  changed_when: true
+
+- name: Render ArgoCD repository credential Secret
+  ansible.builtin.template:
+    src: repo-secret.yaml.j2
+    dest: /tmp/argocd-repo-secret.yaml
+    mode: "0600"
+
+- name: Apply ArgoCD repository credential Secret
+  ansible.builtin.command: >
+    kubectl apply -f /tmp/argocd-repo-secret.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: repo_secret_apply
+  changed_when: "'configured' in repo_secret_apply.stdout or 'created' in repo_secret_apply.stdout"
+
+- name: Render ArgoCD Application manifests
+  ansible.builtin.template:
+    src: application.yaml.j2
+    dest: "/tmp/argocd-app-{{ item.name }}.yaml"
+    mode: "0644"
+  loop: "{{ argocd_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: argocd_apps | length > 0
+
+- name: Apply ArgoCD Application manifests
+  ansible.builtin.command: >
+    kubectl apply -f /tmp/argocd-app-{{ item.name }}.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: app_apply
+  changed_when: "'configured' in app_apply.stdout or 'created' in app_apply.stdout"
+  loop: "{{ argocd_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: argocd_apps | length > 0

@@ -1,0 +1,86 @@
+---
+# Deploy ArgoCD GitOps controller on K3s via Helm.
+# Non-HA single-replica install with Traefik ingress and wildcard TLS.
+# ArgoCD serves HTTPS; Traefik connects via ServersTransport with insecureSkipVerify.
+
+- name: Add ArgoCD Helm repo
+  ansible.builtin.command: helm repo add argo https://argoproj.github.io/argo-helm
+  register: helm_repo_add
+  changed_when: "'has been added' in helm_repo_add.stdout"
+  failed_when:
+    - helm_repo_add.rc != 0
+    - "'already exists' not in helm_repo_add.stderr | lower"
+
+- name: Update Helm repos
+  ansible.builtin.command: helm repo update
+  changed_when: false
+
+- name: Create argocd namespace (idempotent)
+  ansible.builtin.shell: >
+    kubectl create namespace {{ argocd_namespace }} --dry-run=client -o yaml | kubectl apply -f -
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+
+- name: Render ArgoCD ServersTransport manifest
+  ansible.builtin.template:
+    src: servers-transport.yaml.j2
+    dest: /tmp/argocd-servers-transport.yaml
+    mode: "0644"
+
+- name: Apply ArgoCD ServersTransport
+  ansible.builtin.command: kubectl apply -f /tmp/argocd-servers-transport.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: st_apply
+  changed_when: "'configured' in st_apply.stdout or 'created' in st_apply.stdout"
+
+- name: Render ArgoCD Helm values template
+  ansible.builtin.template:
+    src: values.yaml.j2
+    dest: /tmp/argocd-values.yaml
+    mode: "0644"
+
+- name: Install ArgoCD via Helm
+  ansible.builtin.command: >
+    helm upgrade --install argo-cd argo/argo-cd
+    --namespace {{ argocd_namespace }}
+    --version {{ argocd_chart_version }}
+    --values /tmp/argocd-values.yaml
+    --atomic
+    --timeout 5m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: argocd_install
+  changed_when: "'has been deployed' in argocd_install.stdout or 'has been upgraded' in argocd_install.stdout"
+
+- name: Wait for argocd-server Deployment rollout
+  ansible.builtin.command: >
+    kubectl rollout status deployment/argo-cd-argocd-server
+    -n {{ argocd_namespace }}
+    --timeout=5m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+
+- name: Wait for argocd-repo-server Deployment rollout
+  ansible.builtin.command: >
+    kubectl rollout status deployment/argo-cd-argocd-repo-server
+    -n {{ argocd_namespace }}
+    --timeout=5m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+
+- name: Wait for argocd-application-controller StatefulSet rollout
+  ansible.builtin.command: >
+    kubectl rollout status statefulset/argo-cd-argocd-application-controller
+    -n {{ argocd_namespace }}
+    --timeout=5m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+
+- name: Display ArgoCD deployment summary
+  ansible.builtin.debug:
+    msg: "ArgoCD dashboard: https://{{ argocd_hostname }} — log in with admin / <password from all.yml>"

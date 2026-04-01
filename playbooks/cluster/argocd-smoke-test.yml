@@ -1,0 +1,79 @@
+---
+# Smoke test playbook for the ArgoCD + Gitea GitOps stack.
+# Verifies that all components are Running, PVC is Bound, and ArgoCD can reach Gitea.
+# Run after deploying with: ansible-playbook -i hosts.ini playbooks/cluster/argocd-smoke-test.yml
+
+- name: ArgoCD + Gitea GitOps Stack Smoke Test
+  hosts: servers
+  become: true
+  vars:
+    argocd_namespace: "argocd"
+    gitea_namespace: "gitea"
+    gitea_hostname: "gitea.vanlab.local"
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+  tasks:
+    - name: Check ArgoCD server pod is Running
+      ansible.builtin.command: >
+        kubectl get pods -n {{ argocd_namespace }}
+        -l app.kubernetes.io/name=argocd-server
+        -o jsonpath='{.items[0].status.phase}'
+      register: argocd_server_status
+      changed_when: false
+      failed_when: argocd_server_status.stdout != "Running"
+
+    - name: Check ArgoCD repo-server pod is Running
+      ansible.builtin.command: >
+        kubectl get pods -n {{ argocd_namespace }}
+        -l app.kubernetes.io/name=argocd-repo-server
+        -o jsonpath='{.items[0].status.phase}'
+      register: argocd_repo_status
+      changed_when: false
+      failed_when: argocd_repo_status.stdout != "Running"
+
+    - name: Check ArgoCD application-controller pod is Running
+      ansible.builtin.command: >
+        kubectl get pods -n {{ argocd_namespace }}
+        -l app.kubernetes.io/name=argocd-application-controller
+        -o jsonpath='{.items[0].status.phase}'
+      register: argocd_ctrl_status
+      changed_when: false
+      failed_when: argocd_ctrl_status.stdout != "Running"
+
+    - name: Check Gitea pod is Running
+      ansible.builtin.command: >
+        kubectl get pods -n {{ gitea_namespace }}
+        -l app.kubernetes.io/name=gitea
+        -o jsonpath='{.items[0].status.phase}'
+      register: gitea_pod_status
+      changed_when: false
+      failed_when: gitea_pod_status.stdout != "Running"
+
+    - name: Check Gitea PVC is Bound
+      ansible.builtin.command: >
+        kubectl get pvc gitea -n {{ gitea_namespace }}
+        -o jsonpath='{.status.phase}'
+      register: gitea_pvc_status
+      changed_when: false
+      failed_when: gitea_pvc_status.stdout != "Bound"
+
+    - name: Check ArgoCD can reach Gitea repo (git ls-remote via argocd-repo-server)
+      ansible.builtin.command: >
+        kubectl exec -n {{ argocd_namespace }}
+        deploy/argo-cd-argocd-repo-server
+        -- git ls-remote https://{{ gitea_hostname }}
+      register: git_ls_remote
+      changed_when: false
+      failed_when: git_ls_remote.rc != 0
+      ignore_errors: true
+
+    - name: Display smoke test summary
+      ansible.builtin.debug:
+        msg:
+          - "ArgoCD server:              {{ argocd_server_status.stdout }}"
+          - "ArgoCD repo-server:         {{ argocd_repo_status.stdout }}"
+          - "ArgoCD app-controller:      {{ argocd_ctrl_status.stdout }}"
+          - "Gitea pod:                  {{ gitea_pod_status.stdout }}"
+          - "Gitea PVC:                  {{ gitea_pvc_status.stdout }}"
+          - "ArgoCD → Gitea reachable:   {{ 'YES' if git_ls_remote.rc == 0 else 'NO (check gitea_argocd_token and Gitea availability)' }}"
