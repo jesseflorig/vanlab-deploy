@@ -80,13 +80,13 @@
         post_reboot_delay: 10
         reboot_timeout: 300
 
-- name: Install K3s on server nodes
-  hosts: servers
+- name: Install K3s on first server node (etcd initializer)
+  hosts: "{{ groups['servers'][0] }}"
   become: true
   tasks:
-    - name: Install K3s server
+    - name: Install K3s server with --cluster-init (embedded etcd)
       shell: |
-        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik --disable local-storage --write-kubeconfig-mode 600 --flannel-iface={{ k3s_flannel_iface }}" sh -
+        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--cluster-init --disable traefik --disable local-storage --write-kubeconfig-mode 600 --flannel-iface={{ k3s_flannel_iface }}" sh -
       args:
         creates: /etc/systemd/system/k3s.service
 
@@ -126,6 +126,39 @@
     - name: Set K3s token fact
       ansible.builtin.set_fact:
         k3s_node_token: "{{ k3s_token_raw['content'] | b64decode | regex_replace('\n', '') }}"
+
+- name: Install K3s on additional server nodes (etcd quorum members)
+  # Runs only when there are 2+ servers in the inventory.
+  # Additional servers join the existing etcd cluster via K3S_URL + K3S_TOKEN.
+  hosts: "{{ groups['servers'][1:] | default([]) }}"
+  become: true
+  vars:
+    k3s_url: "https://{{ k3s_master_ip }}:6443"
+  tasks:
+    - name: Install K3s server (join existing etcd cluster)
+      ansible.builtin.shell: |
+        curl -sfL https://get.k3s.io | \
+          K3S_TOKEN={{ hostvars[groups['servers'][0]]['k3s_node_token'] }} \
+          INSTALL_K3S_EXEC="server --server {{ k3s_url }} --disable traefik --disable local-storage --write-kubeconfig-mode 600 --flannel-iface={{ k3s_flannel_iface }}" sh -
+      args:
+        creates: /etc/systemd/system/k3s.service
+
+    - name: Restrict kubeconfig permissions
+      ansible.builtin.file:
+        path: /etc/rancher/k3s/k3s.yaml
+        mode: '0600'
+
+    - name: Wait for additional server to be Ready
+      ansible.builtin.shell: |
+        kubectl get node {{ inventory_hostname }} \
+          -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+      register: node_ready
+      until: node_ready.stdout == "True"
+      retries: 30
+      delay: 10
+      delegate_to: "{{ groups['servers'][0] }}"
+      become: true
+      changed_when: false
 
 - name: Install K3s on agent nodes
   hosts: agents

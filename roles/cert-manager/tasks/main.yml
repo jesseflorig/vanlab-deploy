@@ -97,6 +97,14 @@
   delay: 10
   until: issuer_result.rc == 0
 
+- name: Ensure certificate target namespace exists
+  ansible.builtin.shell: |
+    kubectl create namespace {{ certificate_namespace }} --dry-run=client -o yaml | kubectl apply -f -
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: cert_ns_result
+  changed_when: "'created' in cert_ns_result.stdout"
+
 - name: Render Certificate manifest
   ansible.builtin.template:
     src: certificate.yaml.j2

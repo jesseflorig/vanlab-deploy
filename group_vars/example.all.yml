@@ -1,5 +1,11 @@
 # Secrets template — copy to group_vars/all.yml and fill in real values
 # group_vars/all.yml is gitignored
+#
+# Cluster topology note (hosts.ini [servers] group):
+#   The cluster uses embedded etcd. Server count MUST be odd (1, 3, or 5) for quorum.
+#   The first entry in [servers] initializes the etcd cluster (--cluster-init).
+#   Additional [servers] entries join the existing etcd quorum automatically.
+#   Fault tolerance: 1 server = none, 3 servers = 1 node, 5 servers = 2 nodes.
 
 # SSH credentials (used by all managed hosts)
 ansible_ssh_pass: <SSH_PASSWORD>
