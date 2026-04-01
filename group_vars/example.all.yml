@@ -29,3 +29,22 @@ argocd_admin_password_bcrypt: <ARGOCD_ADMIN_PASSWORD_BCRYPT_HASH>
 # Gitea PAT for ArgoCD repository access (used by services-deploy.yml → argocd-bootstrap role)
 # Create a Gitea PAT with read:repository scope for the argocd user
 gitea_argocd_token: <GITEA_ARGOCD_PAT_TOKEN>
+
+# ArgoCD applications (used by services-deploy.yml → argocd-bootstrap role)
+# Each entry registers a GitOps app synced from the vanlab repo in Gitea
+argocd_apps:
+  - name: whoami
+    repo: gitadmin/vanlab
+    path: manifests/whoami
+    namespace: whoami
+    revision: main
+  - name: static-site
+    repo: gitadmin/vanlab
+    path: manifests/static-site
+    namespace: static-site
+    revision: main
+  - name: redirects
+    repo: gitadmin/vanlab
+    path: manifests/redirects
+    namespace: traefik
+    revision: main
