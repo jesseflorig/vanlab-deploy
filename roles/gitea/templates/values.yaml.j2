@@ -44,5 +44,6 @@ service:
     type: ClusterIP
     port: 3000
   ssh:
-    type: ClusterIP
+    type: NodePort
     port: 22
+    nodePort: 30022
