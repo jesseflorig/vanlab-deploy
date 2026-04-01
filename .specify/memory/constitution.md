@@ -1,17 +1,20 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.1.1 → 1.2.0
-Modified principles: N/A
+Version change: 1.2.0 → 1.3.0
+Modified principles: None (existing principles unchanged)
 Added sections:
-  - Principle VIII: Persistent Storage (new)
-  - Technology Stack: added Longhorn entry
-Removed sections: N/A
+  - Principle IX: Secure Service Exposure (HTTPS/MQTTS for all externally accessible services)
+  - Principle X: Intra-Cluster Service Locality (CoreDNS overrides for cluster-to-cluster traffic)
+  - Principle XI: GitOps Application Deployment (split manifests under manifests/, ArgoCD sync)
+  - Technology Stack: added Gitea, ArgoCD, manifests/ structure
+  - Deployment Workflow: updated to reflect GitOps layer
+Removed sections: None
 Templates requiring updates:
-  - .specify/templates/plan-template.md ✅ — Constitution Check gates align with principles below
-  - .specify/templates/spec-template.md ✅ — No mandatory sections added/removed; existing structure fits
-  - .specify/templates/tasks-template.md ✅ — Task categories now include storage claim validation
-  - .specify/templates/agent-file-template.md ✅ — No principle-named references; generic structure unchanged
+  - .specify/templates/plan-template.md ✅ — Constitution Check gates align with IX/X/XI
+  - .specify/templates/spec-template.md ✅ — No mandatory sections added/removed
+  - .specify/templates/tasks-template.md ✅ — No structural changes required
+  - .specify/templates/agent-file-template.md ✅ — No principle-named references
   - .specify/templates/constitution-template.md ✅ — Source template; no changes required
 Deferred TODOs: None — all placeholders resolved.
 -->
@@ -118,6 +121,63 @@ All cluster services requiring durable storage MUST use Longhorn-backed
 each node's local NVMe. Using it consistently for all stateful workloads ensures data
 survives single-node failures and keeps storage configuration observable in the repository.
 
+### IX. Secure Service Exposure
+
+All services exposed externally MUST be served over HTTPS or its protocol equivalent:
+
+- HTTP services MUST NOT be exposed externally; Traefik MUST redirect HTTP → HTTPS for all
+  ingress routes
+- MQTT MUST be served exclusively on MQTTS (port 8883); plaintext MQTT (port 1883) MUST be
+  disabled or firewall-blocked
+- Services MUST use TLS certificates issued by a trusted CA (e.g., Let's Encrypt via
+  cert-manager DNS-01); self-signed certificates are permitted only for internal cluster
+  service-to-service communication where verification is explicitly disabled by design
+- Wildcard certificates (`*.fleet1.cloud`) MUST be used where a single cert covers multiple
+  subdomains, and MUST be issued and rotated automatically via cert-manager
+
+**Rationale**: Plaintext external access exposes credentials and data to interception.
+Automated certificate management removes the operational burden of manual rotation and
+eliminates certificate expiry incidents.
+
+### X. Intra-Cluster Service Locality
+
+Cluster-to-cluster service communication MUST route internally and MUST NOT traverse public
+infrastructure. Specifically:
+
+- Any public hostname used as a service endpoint (e.g., `gitea.fleet1.cloud`) MUST have a
+  corresponding CoreDNS override that resolves it to an internal cluster IP or node IP within
+  the `10.1.20.x` subnet
+- CoreDNS overrides MUST be managed as Kubernetes ConfigMaps rendered by Ansible templates and
+  applied as part of the bootstrap role; manual `kubectl patch` of CoreDNS config is prohibited
+- Services that communicate intra-cluster MUST be verified to resolve internally before
+  declaring the integration complete (e.g., ArgoCD → Gitea MUST resolve to the cluster node,
+  not egress through the Cloudflare Tunnel)
+
+**Rationale**: Routing intra-cluster traffic through public infrastructure (Cloudflare Tunnel,
+DNS, CDN) adds unnecessary latency, external dependency, and potential data exposure. Keeping
+traffic on the LAN ensures service connectivity is independent of internet availability.
+
+### XI. GitOps Application Deployment
+
+Application workloads MUST be defined as Kubernetes manifests and synced to the cluster via
+ArgoCD. Infrastructure components (Helm-managed: Traefik, cert-manager, Longhorn, Gitea,
+ArgoCD itself) remain Ansible-managed and are excluded from this principle.
+
+- Application manifests MUST live under `manifests/` at the repository root, organized in
+  per-app subdirectories (e.g., `manifests/static-site/`, `manifests/my-app/`)
+- Each app subdirectory MUST map to exactly one ArgoCD `Application` resource registered via
+  the `argocd_apps` variable in `group_vars/all.yml`
+- ArgoCD Applications MUST be configured with `automated.prune: true` and
+  `automated.selfHeal: true` so the cluster state always converges to the Git state
+- Manifests MUST be pushed to the Gitea repository (`gitea.fleet1.cloud`) and synced from
+  there; ArgoCD MUST NOT sync directly from GitHub
+- New application workloads MUST NOT be deployed via `kubectl apply` or Ansible `command`
+  tasks; the GitOps loop is the sole deployment mechanism for application manifests
+
+**Rationale**: GitOps provides a single source of truth for cluster application state, enables
+git-driven rollbacks (revert a commit → ArgoCD restores prior state), and makes every
+deployment auditable via the Gitea commit history.
+
 ## Technology Stack
 
 The canonical technology choices for this project are:
@@ -125,6 +185,12 @@ The canonical technology choices for this project are:
 - **Orchestration**: K3s (lightweight Kubernetes) on Raspberry Pi OS (Debian-based, arm64)
 - **Automation**: Ansible — playbooks at repository root, roles in `roles/`
 - **Package management**: Helm — charts managed via `roles/helm/` and `services-deploy.yml`
+- **GitOps**: ArgoCD — syncs application manifests from `manifests/` in the Gitea repository;
+  installed via `roles/argocd/`; bootstrapped via `roles/argocd-bootstrap/`
+- **Git hosting**: Gitea — self-hosted at `gitea.fleet1.cloud`; installed via `roles/gitea/`;
+  serves as the ArgoCD source-of-truth repository
+- **Application manifests**: `manifests/<app-name>/` — one subdirectory per ArgoCD Application;
+  each directory contains plain Kubernetes YAML synced automatically to the cluster
 - **Storage**: Longhorn v1.11.1 — distributed block storage using the `longhorn` StorageClass;
   data stored at `/var/lib/longhorn` on each node's local NVMe disk; installed via
   `https://charts.longhorn.io`; requires `open-iscsi` and `nfs-common` on all nodes
@@ -151,14 +217,28 @@ Deviations from this stack MUST be documented in `README.md` with a rationale.
 
 ## Deployment Workflow
 
+### Infrastructure (Ansible-managed)
+
 1. **Verify hosts**: `ansible-playbook -i hosts.ini check_hosts.yml`
-2. **Deploy cluster**: `ansible-playbook -i hosts.ini k3s-deploy.yml`
-3. **Deploy services**: `ansible-playbook -i hosts.ini services-deploy.yml`
+2. **Deploy cluster**: `ansible-playbook -i hosts.ini playbooks/cluster/k3s-deploy.yml`
+3. **Deploy services**: `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml`
+4. **Bootstrap GitOps**: `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags argocd-bootstrap`
 
 - Playbooks MUST be run in the order above for a fresh cluster.
 - Each playbook MUST be independently re-runnable (see Principle II).
-- Known manual remediation steps are tracked in `README.md § Known Issue` until automated.
+- Known manual remediation steps are tracked in `README.md § Known Issues` until automated.
 - All new roles or playbooks MUST include a brief description comment at the top of the file.
+
+### Application Workloads (GitOps-managed)
+
+1. Add or update manifests under `manifests/<app-name>/`
+2. Register the app in `argocd_apps` in `group_vars/all.yml` (first deployment only)
+3. Re-run `--tags argocd-bootstrap` to register new ArgoCD Applications (first deployment only)
+4. Commit and push to Gitea (`git push gitea main`)
+5. ArgoCD automatically syncs within 3 minutes; monitor via `https://argocd.fleet1.cloud`
+
+- Direct `kubectl apply` of application manifests is prohibited (see Principle XI).
+- Rollbacks are performed by reverting the Git commit in Gitea; ArgoCD restores prior state.
 
 ## Governance
 
@@ -172,7 +252,8 @@ This constitution supersedes all informal practices. Amendments require:
 3. `LAST_AMENDED_DATE` updated to the date of the commit.
 
 All playbook PRs/reviews MUST verify compliance with the principles above, particularly
-Idempotency (II), Secrets Hygiene (IV), and Persistent Storage (VIII). Complexity violations
-MUST be justified in the PR description before merging.
+Idempotency (II), Secrets Hygiene (IV), Persistent Storage (VIII), Secure Service Exposure
+(IX), and GitOps Deployment (XI). Complexity violations MUST be justified in the PR
+description before merging.
 
-**Version**: 1.2.0 | **Ratified**: 2026-03-27 | **Last Amended**: 2026-03-31
+**Version**: 1.3.0 | **Ratified**: 2026-03-27 | **Last Amended**: 2026-03-31
