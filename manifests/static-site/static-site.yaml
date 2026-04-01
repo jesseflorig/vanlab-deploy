@@ -1,0 +1,92 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: static-site-html
+  namespace: static-site
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>fleet1.cloud</title>
+      <style>
+        body { font-family: sans-serif; display: flex; justify-content: center;
+               align-items: center; height: 100vh; margin: 0; background: #f5f5f5; }
+        .card { text-align: center; padding: 2rem; background: white;
+                border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        h1 { margin: 0 0 0.5rem; color: #333; }
+        p { color: #666; margin: 0; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <h1>fleet1.cloud</h1>
+        <p>Coming soon.</p>
+      </div>
+    </body>
+    </html>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: static-site
+  namespace: static-site
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: static-site
+  template:
+    metadata:
+      labels:
+        app: static-site
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: html
+              mountPath: /usr/share/nginx/html
+      volumes:
+        - name: html
+          configMap:
+            name: static-site-html
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: static-site
+  namespace: static-site
+spec:
+  selector:
+    app: static-site
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fleet1-cloud
+  namespace: static-site
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: fleet1.cloud
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: static-site
+                port:
+                  number: 80
