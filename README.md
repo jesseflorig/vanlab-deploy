@@ -29,6 +29,7 @@ cp group_vars/example.all.yml group_vars/all.yml
 | Network | OPNsense (check) | `ansible-playbook -i hosts.ini playbooks/network/network-deploy.yml --check` |
 | Utilities | Check All Hosts | `ansible-playbook -i hosts.ini playbooks/utilities/check_hosts.yml` |
 | Utilities | Disk Health | `ansible-playbook -i hosts.ini playbooks/utilities/disk-health.yml --ask-become-pass` |
+| Utilities | Drain & Shutdown | `ansible-playbook -i hosts.ini playbooks/utilities/drain-shutdown.yml -e target=<node> --ask-become-pass` |
 
 ## Playbook Directory Structure
 
@@ -44,6 +45,7 @@ playbooks/
 └── utilities/
     ├── check_hosts.yml        — ping all managed hosts and report online/offline
     ├── disk-health.yml        — enumerate NVMe drives and report capacity per node
+    ├── drain-shutdown.yml     — drain a node and shut it down (-e target=<node>)
     ├── read-k3s-token.yml     — read K3s join token from server node
     └── test-join-cmd.yml      — print K3s agent join command for manual use
 ```

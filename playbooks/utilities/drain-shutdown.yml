@@ -1,0 +1,47 @@
+---
+# Drain a node and shut it down safely.
+#
+# Usage:
+#   ansible-playbook -i hosts.ini playbooks/utilities/drain-shutdown.yml -e target=node4
+#
+# For server/etcd nodes: ensure at least 2 other servers remain up to maintain quorum.
+
+- name: Drain node from Kubernetes cluster
+  hosts: servers[0]
+  become: true
+  gather_facts: false
+  vars:
+    target: ""
+  tasks:
+    - name: Fail if target not specified
+      ansible.builtin.fail:
+        msg: "Specify the node to drain: -e target=<nodename>"
+      when: target == ""
+
+    - name: Drain node {{ target }}
+      ansible.builtin.command: >
+        kubectl drain {{ target }}
+        --ignore-daemonsets
+        --delete-emptydir-data
+        --timeout=120s
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      changed_when: true
+
+- name: Shut down target node
+  hosts: "{{ target }}"
+  become: true
+  gather_facts: false
+  vars:
+    target: ""
+  tasks:
+    - name: Fail if target not specified
+      ansible.builtin.fail:
+        msg: "Specify the node to shut down: -e target=<nodename>"
+      when: target == ""
+
+    - name: Shut down {{ target }}
+      ansible.builtin.command: shutdown -h now
+      changed_when: true
+      async: 5
+      poll: 0
