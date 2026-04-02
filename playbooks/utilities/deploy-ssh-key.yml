@@ -1,0 +1,31 @@
+---
+# Deploy an SSH public key to all managed nodes for passwordless access.
+#
+# Usage (defaults to ~/.ssh/id_rsa.pub on the Ansible controller):
+#   ansible-playbook -i hosts.ini playbooks/utilities/deploy-ssh-key.yml --ask-become-pass
+#
+# Usage with a specific key file:
+#   ansible-playbook -i hosts.ini playbooks/utilities/deploy-ssh-key.yml --ask-become-pass \
+#     -e ssh_public_key_file=~/.ssh/id_ed25519.pub
+#
+# Usage with a key string:
+#   ansible-playbook -i hosts.ini playbooks/utilities/deploy-ssh-key.yml --ask-become-pass \
+#     -e "ssh_public_key='ssh-ed25519 AAAA... user@host'"
+
+- name: Deploy SSH public key to all managed nodes
+  hosts: cluster:compute
+  become: true
+  gather_facts: false
+  vars:
+    ssh_public_key_file: "~/.ssh/id_rsa.pub"
+    ssh_public_key: "{{ lookup('file', ssh_public_key_file) }}"
+  tasks:
+    - name: Deploy SSH public key for {{ ansible_user }}
+      ansible.posix.authorized_key:
+        user: "{{ ansible_user }}"
+        key: "{{ ssh_public_key }}"
+        state: present
+
+    - name: Report deployment
+      ansible.builtin.debug:
+        msg: "SSH key deployed to {{ inventory_hostname }} ({{ ansible_host }}) for user {{ ansible_user }}"
