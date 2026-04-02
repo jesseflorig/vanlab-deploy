@@ -28,6 +28,10 @@ grafana_admin_password: <GRAFANA_ADMIN_PASSWORD>
 grafana_hostname: grafana.fleet1.cloud
 prometheus_hostname: prometheus.fleet1.cloud
 
+# Loki log aggregation (used by services-deploy.yml → loki role)
+loki_storage_size: "20Gi"
+loki_retention_period: "168h"  # 7 days
+
 # Gitea admin account (used by services-deploy.yml → gitea role)
 gitea_admin_username: <GITEA_ADMIN_USERNAME>
 gitea_admin_password: <GITEA_ADMIN_PASSWORD>

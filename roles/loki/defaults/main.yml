@@ -1,0 +1,5 @@
+---
+loki_namespace: monitoring
+loki_chart_version: "6.55.0"
+loki_storage_size: "20Gi"
+loki_retention_period: "168h"  # 7 days

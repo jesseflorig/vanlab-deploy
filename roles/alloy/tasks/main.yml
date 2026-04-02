@@ -1,0 +1,65 @@
+---
+# Deploy Grafana Alloy as a DaemonSet log shipper on all K3s cluster nodes.
+# Ships pod logs and journald system logs to Loki.
+# Runs on every node including control-plane via tolerations.
+
+- name: Add Grafana Helm repo
+  ansible.builtin.command: helm repo add grafana https://grafana.github.io/helm-charts
+  register: helm_repo_add
+  changed_when: "'has been added' in helm_repo_add.stdout"
+  failed_when:
+    - helm_repo_add.rc != 0
+    - "'already exists' not in helm_repo_add.stderr | lower"
+  run_once: true
+
+- name: Update Helm repos
+  ansible.builtin.command: helm repo update
+  changed_when: false
+  run_once: true
+
+- name: Render Alloy Helm values
+  ansible.builtin.template:
+    src: values.yaml.j2
+    dest: /tmp/alloy-values.yaml
+    mode: "0644"
+  run_once: true
+
+- name: Install Alloy via Helm
+  ansible.builtin.command: >
+    helm upgrade --install alloy grafana/alloy
+    --namespace {{ alloy_namespace }}
+    --version {{ alloy_chart_version }}
+    --values /tmp/alloy-values.yaml
+    --timeout 5m
+    --wait
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: alloy_install
+  changed_when: "'has been deployed' in alloy_install.stdout or 'has been upgraded' in alloy_install.stdout"
+  run_once: true
+
+- name: Wait for Alloy DaemonSet rollout
+  ansible.builtin.command: >
+    kubectl rollout status daemonset/alloy
+    -n {{ alloy_namespace }}
+    --timeout=5m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+- name: Display Alloy deployment summary
+  ansible.builtin.command: >
+    kubectl get pods -n {{ alloy_namespace }}
+    -l app.kubernetes.io/name=alloy
+    --no-headers
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: alloy_pods
+  changed_when: false
+  run_once: true
+
+- name: Show Alloy pod count
+  ansible.builtin.debug:
+    msg: "Alloy is running on {{ alloy_pods.stdout_lines | length }} nodes"
+  run_once: true

@@ -1,0 +1,66 @@
+---
+# Deploy Grafana Loki log aggregation store on K3s cluster.
+# SingleBinary mode with Longhorn-backed filesystem storage.
+# Deployed to the monitoring namespace alongside kube-prometheus-stack.
+
+- name: Add Grafana Helm repo
+  ansible.builtin.command: helm repo add grafana https://grafana.github.io/helm-charts
+  register: helm_repo_add
+  changed_when: "'has been added' in helm_repo_add.stdout"
+  failed_when:
+    - helm_repo_add.rc != 0
+    - "'already exists' not in helm_repo_add.stderr | lower"
+  run_once: true
+
+- name: Update Helm repos
+  ansible.builtin.command: helm repo update
+  changed_when: false
+  run_once: true
+
+- name: Render Loki Helm values
+  ansible.builtin.template:
+    src: values.yaml.j2
+    dest: /tmp/loki-values.yaml
+    mode: "0644"
+  run_once: true
+
+- name: Install Loki via Helm
+  ansible.builtin.command: >
+    helm upgrade --install loki grafana/loki
+    --namespace {{ loki_namespace }}
+    --version {{ loki_chart_version }}
+    --values /tmp/loki-values.yaml
+    --timeout 5m
+    --wait
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: loki_install
+  changed_when: "'has been deployed' in loki_install.stdout or 'has been upgraded' in loki_install.stdout"
+  run_once: true
+
+- name: Wait for Loki StatefulSet rollout
+  ansible.builtin.command: >
+    kubectl rollout status statefulset/loki
+    -n {{ loki_namespace }}
+    --timeout=5m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+- name: Verify Loki PVC is Bound
+  ansible.builtin.command: >
+    kubectl get pvc -n {{ loki_namespace }}
+    -l app.kubernetes.io/name=loki
+    -o jsonpath='{.items[0].status.phase}'
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: loki_pvc
+  changed_when: false
+  failed_when: loki_pvc.stdout != "Bound"
+  run_once: true
+
+- name: Display Loki deployment summary
+  ansible.builtin.debug:
+    msg: "Loki is running — push endpoint: http://loki.{{ loki_namespace }}.svc.cluster.local:3100/loki/api/v1/push"
+  run_once: true

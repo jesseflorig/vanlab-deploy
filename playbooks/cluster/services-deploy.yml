@@ -14,6 +14,10 @@
     - longhorn
     - role: kube-prometheus-stack
       tags: [monitoring]
+    - role: loki
+      tags: [loki, monitoring]
+    - role: alloy
+      tags: [alloy, monitoring]
     - traefik
     - static-site
     - role: gitea

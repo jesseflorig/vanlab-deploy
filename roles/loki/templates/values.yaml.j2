@@ -1,0 +1,70 @@
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+
+  commonConfig:
+    replication_factor: 1
+
+  limits_config:
+    retention_period: {{ loki_retention_period }}
+
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+
+  storage:
+    type: filesystem
+    bucketNames:
+      chunks: chunks
+      ruler: ruler
+      admin: admin
+
+  storageConfig:
+    filesystem:
+      directory: /var/loki/chunks
+
+  compactor:
+    retention_enabled: true
+    delete_request_store: filesystem
+    working_directory: /var/loki/retention
+    compaction_interval: 10m
+    retention_delete_delay: 2h
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    size: {{ loki_storage_size }}
+    storageClass: longhorn
+
+# Disable SimpleScalable components (default to non-zero in v6.x chart)
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
+# No external ingress — accessed internally by Alloy and Grafana
+gateway:
+  enabled: false
+
+# Disable test pod
+test:
+  enabled: false
+
+# Disable self-monitoring
+monitoring:
+  selfMonitoring:
+    enabled: false
+    grafanaAgent:
+      installOperator: false
+  lokiCanary:
+    enabled: false

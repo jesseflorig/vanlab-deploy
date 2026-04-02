@@ -1,0 +1,79 @@
+// Grafana Alloy configuration for Vanlab K3s cluster log shipping.
+// Ships pod container logs and journald system logs to Loki.
+
+// Discover all pods running in the cluster
+discovery.kubernetes "pods" {
+  role = "pod"
+}
+
+// Relabel discovered pod targets to add useful metadata labels
+discovery.relabel "pods" {
+  targets = discovery.kubernetes.pods.targets
+
+  rule {
+    source_labels = ["__meta_kubernetes_namespace"]
+    target_label  = "namespace"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_name"]
+    target_label  = "pod"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_container_name"]
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_node_name"]
+    target_label  = "node_name"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+    target_label  = "app"
+  }
+}
+
+// Collect pod container logs from discovered pods
+loki.source.kubernetes "pods" {
+  targets    = discovery.relabel.pods.output
+  forward_to = [loki.write.default.receiver]
+}
+
+// Collect systemd journal logs from the host
+loki.source.journal "system" {
+  forward_to = [loki.write.default.receiver]
+  relabel_rules = discovery.relabel.journal.rules
+  labels = {
+    job = "systemd-journal",
+  }
+}
+
+// Relabel journal entries to extract useful fields
+discovery.relabel "journal" {
+  targets = []
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+
+  rule {
+    source_labels = ["__journal__hostname"]
+    target_label  = "hostname"
+  }
+
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "level"
+  }
+}
+
+// Write logs to Loki
+loki.write "default" {
+  endpoint {
+    url = "{{ alloy_loki_endpoint }}"
+  }
+}

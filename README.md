@@ -25,6 +25,8 @@ cp group_vars/example.all.yml group_vars/all.yml
 |----------|----------|---------|
 | Cluster | Deploy K3s | `ansible-playbook -i hosts.ini playbooks/cluster/k3s-deploy.yml --ask-become-pass` |
 | Cluster | Deploy Services | `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --ask-become-pass` |
+| Cluster | Deploy Loki only | `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags loki --ask-become-pass` |
+| Cluster | Deploy Alloy only | `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags alloy --ask-become-pass` |
 | Edge | Deploy Cloudflared | `ansible-playbook -i hosts.ini playbooks/compute/edge-deploy.yml --ask-become-pass` |
 | Network | OPNsense (check) | `ansible-playbook -i hosts.ini playbooks/network/network-deploy.yml --check` |
 | Utilities | Check All Hosts | `ansible-playbook -i hosts.ini playbooks/utilities/check_hosts.yml` |
