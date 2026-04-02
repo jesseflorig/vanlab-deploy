@@ -5,9 +5,10 @@
 #   ansible-playbook -i hosts.ini playbooks/utilities/drain-shutdown.yml -e target=node4
 #
 # For server/etcd nodes: ensure at least 2 other servers remain up to maintain quorum.
+# Automatically selects a different server to issue the drain command if target is servers[0].
 
 - name: Drain node from Kubernetes cluster
-  hosts: servers[0]
+  hosts: "{{ 'servers[1]' if target == groups['servers'][0] else 'servers[0]' }}"
   become: true
   gather_facts: false
   vars:
