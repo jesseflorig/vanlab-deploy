@@ -52,8 +52,8 @@ playbooks/
 
 | Group | Members | Notes |
 |-------|---------|-------|
-| `servers` | node1, node3 | K3s control-plane + etcd nodes (10.1.20.11, .13) |
-| `agents` | node2, node4 | K3s worker nodes (10.1.20.12, .14) |
+| `servers` | node1, node3, node5 | K3s control-plane + etcd nodes (10.1.20.11, .13, .15) |
+| `agents` | node2, node4, node6 | K3s worker nodes (10.1.20.12, .14, .16) |
 | `cluster` | servers + agents | Full K3s cluster |
 | `compute` | edge | CM5 Cloudflared device (10.1.10.x) |
 

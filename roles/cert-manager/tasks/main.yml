@@ -6,10 +6,12 @@
   failed_when:
     - helm_repo_add.rc != 0
     - "'already exists' not in helm_repo_add.stderr | lower"
+  run_once: true
 
 - name: Update Helm repos
   ansible.builtin.command: helm repo update
   changed_when: false
+  run_once: true
 
 - name: Ensure cert-manager namespace exists
   ansible.builtin.shell: |
@@ -18,6 +20,7 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: cm_namespace
   changed_when: "'created' in cm_namespace.stdout or 'configured' in cm_namespace.stdout"
+  run_once: true
 
 - name: Apply cert-manager CRDs
   ansible.builtin.command: >
@@ -27,6 +30,7 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: crds_result
   changed_when: "'created' in crds_result.stdout or 'configured' in crds_result.stdout"
+  run_once: true
 
 - name: Wait for cert-manager CRDs to be established
   ansible.builtin.command: >
@@ -40,6 +44,7 @@
   delay: 5
   register: crd_wait
   until: crd_wait.rc == 0
+  run_once: true
 
 - name: Install cert-manager via Helm
   ansible.builtin.command: >
@@ -52,6 +57,7 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: cm_install
   changed_when: "'has been upgraded' in cm_install.stdout or 'has been deployed' in cm_install.stdout"
+  run_once: true
 
 - name: Wait for cert-manager webhook to be ready
   ansible.builtin.command: >
@@ -61,6 +67,7 @@
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   changed_when: false
+  run_once: true
 
 - name: Render Cloudflare API token Secret
   ansible.builtin.template:
@@ -68,6 +75,7 @@
     dest: /tmp/cf-secret.yaml
     mode: "0600"
   no_log: true
+  run_once: true
 
 - name: Apply Cloudflare API token Secret
   ansible.builtin.command: kubectl apply -f /tmp/cf-secret.yaml
@@ -75,17 +83,20 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: cf_secret
   changed_when: "'created' in cf_secret.stdout or 'configured' in cf_secret.stdout"
+  run_once: true
 
 - name: Remove Cloudflare Secret temp file
   ansible.builtin.file:
     path: /tmp/cf-secret.yaml
     state: absent
+  run_once: true
 
 - name: Render ClusterIssuer manifest
   ansible.builtin.template:
     src: cluster-issuer.yaml.j2
     dest: /tmp/cluster-issuer.yaml
     mode: "0644"
+  run_once: true
 
 - name: Apply ClusterIssuer
   ansible.builtin.command: kubectl apply -f /tmp/cluster-issuer.yaml
@@ -96,6 +107,7 @@
   retries: 5
   delay: 10
   until: issuer_result.rc == 0
+  run_once: true
 
 - name: Ensure certificate target namespace exists
   ansible.builtin.shell: |
@@ -104,12 +116,14 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: cert_ns_result
   changed_when: "'created' in cert_ns_result.stdout"
+  run_once: true
 
 - name: Render Certificate manifest
   ansible.builtin.template:
     src: certificate.yaml.j2
     dest: /tmp/fleet1-certificate.yaml
     mode: "0644"
+  run_once: true
 
 - name: Apply Certificate CR
   ansible.builtin.command: kubectl apply -f /tmp/fleet1-certificate.yaml
@@ -120,6 +134,7 @@
   retries: 5
   delay: 10
   until: cert_result.rc == 0
+  run_once: true
 
 - name: Wait for certificate to be issued (DNS-01 typically takes 2-5 minutes)
   ansible.builtin.command: >
@@ -130,3 +145,4 @@
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   changed_when: false
+  run_once: true

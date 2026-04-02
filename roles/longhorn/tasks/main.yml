@@ -28,6 +28,7 @@
   until: local_path_check.rc != 0
   retries: 12
   delay: 10
+  run_once: true
 
 - name: Add Longhorn Helm repo
   ansible.builtin.command: helm repo add longhorn https://charts.longhorn.io
@@ -36,16 +37,19 @@
   failed_when:
     - helm_repo_add.rc != 0
     - "'already exists' not in helm_repo_add.stderr | lower"
+  run_once: true
 
 - name: Update Helm repos
   ansible.builtin.command: helm repo update
   changed_when: false
+  run_once: true
 
 - name: Copy Longhorn Helm values
   ansible.builtin.copy:
     src: values.yaml
     dest: /tmp/longhorn-values.yaml
     mode: "0644"
+  run_once: true
 
 - name: Install Longhorn via Helm
   ansible.builtin.command: >
@@ -59,6 +63,7 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: longhorn_install
   changed_when: "'has been deployed' in longhorn_install.stdout or 'has been upgraded' in longhorn_install.stdout"
+  run_once: true
 
 - name: Wait for longhorn-manager DaemonSet rollout
   ansible.builtin.command: >
@@ -68,6 +73,7 @@
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   changed_when: false
+  run_once: true
 
 - name: Wait for longhorn-ui Deployment rollout
   ansible.builtin.command: >
@@ -77,6 +83,7 @@
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   changed_when: false
+  run_once: true
 
 - name: Wait for longhorn-driver-deployer Deployment rollout
   ansible.builtin.command: >
@@ -86,6 +93,7 @@
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   changed_when: false
+  run_once: true
 
 # CSI components are created by longhorn-driver-deployer after it runs.
 # Retry with delay to handle NotFound until resources are created.
@@ -101,6 +109,7 @@
   until: csi_plugin_rollout.rc == 0
   retries: 12
   delay: 15
+  run_once: true
 
 - name: Wait for csi-attacher Deployment rollout
   ansible.builtin.command: >
@@ -114,6 +123,7 @@
   until: csi_attacher_rollout.rc == 0
   retries: 12
   delay: 15
+  run_once: true
 
 - name: Wait for csi-provisioner Deployment rollout
   ansible.builtin.command: >
@@ -127,6 +137,7 @@
   until: csi_provisioner_rollout.rc == 0
   retries: 12
   delay: 15
+  run_once: true
 
 - name: Display Longhorn storage node count
   ansible.builtin.command: >
@@ -137,7 +148,9 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: longhorn_nodes
   changed_when: false
+  run_once: true
 
 - name: Show Longhorn storage nodes
   ansible.builtin.debug:
     msg: "Longhorn storage nodes ({{ longhorn_nodes.stdout_lines | length }}): {{ longhorn_nodes.stdout_lines }}"
+  run_once: true

@@ -9,10 +9,12 @@
   failed_when:
     - helm_repo_add.rc != 0
     - "'already exists' not in helm_repo_add.stderr | lower"
+  run_once: true
 
 - name: Update Helm repos
   ansible.builtin.command: helm repo update
   changed_when: false
+  run_once: true
 
 - name: Create gitea namespace (idempotent)
   ansible.builtin.shell: >
@@ -20,12 +22,14 @@
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   changed_when: false
+  run_once: true
 
 - name: Render Gitea Helm values template
   ansible.builtin.template:
     src: values.yaml.j2
     dest: /tmp/gitea-values.yaml
     mode: "0644"
+  run_once: true
 
 - name: Install Gitea via Helm
   ansible.builtin.command: >
@@ -39,6 +43,7 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: gitea_install
   changed_when: "'has been deployed' in gitea_install.stdout or 'has been upgraded' in gitea_install.stdout"
+  run_once: true
 
 - name: Wait for Gitea Deployment rollout
   ansible.builtin.command: >
@@ -48,6 +53,7 @@
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   changed_when: false
+  run_once: true
 
 - name: Verify Gitea PVC is Bound
   ansible.builtin.command: >
@@ -57,7 +63,9 @@
   register: gitea_pvc_status
   changed_when: false
   failed_when: gitea_pvc_status.stdout != "Bound"
+  run_once: true
 
 - name: Display Gitea deployment summary
   ansible.builtin.debug:
     msg: "Gitea is running — add DNS A record for {{ gitea_hostname }} → {{ ansible_host }} to enable HTTPS access"
+  run_once: true

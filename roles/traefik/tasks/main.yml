@@ -5,10 +5,12 @@
   failed_when:
     - helm_repo_add.rc != 0
     - "'already exists' not in helm_repo_add.stderr | lower"
+  run_once: true
 
 - name: Update Helm repos
   ansible.builtin.command: helm repo update
   changed_when: false
+  run_once: true
 
 - name: Ensure traefik namespace exists
   ansible.builtin.shell: |
@@ -17,12 +19,14 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: traefik_namespace
   changed_when: "'created' in traefik_namespace.stdout or 'configured' in traefik_namespace.stdout"
+  run_once: true
 
 - name: Copy Traefik Helm values file
   ansible.builtin.copy:
     src: values.yaml
     dest: /tmp/traefik-values.yaml
     mode: "0644"
+  run_once: true
 
 - name: Install Traefik
   ansible.builtin.command: >
@@ -33,13 +37,16 @@
     --timeout 3m
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  run_once: true
 
 - name: Wait for Traefik rollout
   ansible.builtin.command: kubectl rollout status deployment/traefik -n traefik --timeout=120s
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   changed_when: false
+  run_once: true
 
 - name: Display Traefik NodePort access info
   ansible.builtin.debug:
     msg: "Traefik is available at http://{{ ansible_host }}:30080 — use this as the Cloudflare tunnel backend URL"
+  run_once: true

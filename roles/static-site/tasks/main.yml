@@ -4,6 +4,7 @@
     src: site.yaml
     dest: /tmp/site.yaml
     mode: "0644"
+  run_once: true
 
 - name: Apply static site manifest
   ansible.builtin.command: kubectl apply -f /tmp/site.yaml
@@ -11,18 +12,21 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: site_result
   changed_when: "'created' in site_result.stdout or 'configured' in site_result.stdout"
+  run_once: true
 
 - name: Wait for static site rollout
   ansible.builtin.command: kubectl rollout status deployment/static-site -n traefik --timeout=60s
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   changed_when: false
+  run_once: true
 
 - name: Copy redirect rules manifest
   ansible.builtin.copy:
     src: redirects.yaml
     dest: /tmp/redirects.yaml
     mode: "0644"
+  run_once: true
 
 - name: Apply redirect rules manifest
   ansible.builtin.command: kubectl apply -f /tmp/redirects.yaml
@@ -30,3 +34,4 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: redirects_result
   changed_when: "'created' in redirects_result.stdout or 'configured' in redirects_result.stdout"
+  run_once: true

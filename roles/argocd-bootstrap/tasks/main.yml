@@ -9,6 +9,7 @@
       gitea_argocd_token is not set — skipping argocd-bootstrap.
       Set gitea_argocd_token in group_vars/all.yml and re-run with --tags argocd-bootstrap.
   when: gitea_argocd_token == ""
+  run_once: true
 
 - name: End play if gitea_argocd_token is not set
   ansible.builtin.meta: end_play
@@ -19,6 +20,7 @@
     src: coredns-override.yaml.j2
     dest: /tmp/coredns-override.yaml
     mode: "0644"
+  run_once: true
 
 - name: Apply CoreDNS override
   ansible.builtin.command: kubectl apply -f /tmp/coredns-override.yaml
@@ -26,6 +28,7 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: coredns_apply
   changed_when: "'configured' in coredns_apply.stdout or 'created' in coredns_apply.stdout"
+  run_once: true
 
 - name: Restart CoreDNS to pick up override
   ansible.builtin.command: >
@@ -34,12 +37,14 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   when: coredns_apply.changed
   changed_when: true
+  run_once: true
 
 - name: Render ArgoCD repository credential Secret
   ansible.builtin.template:
     src: repo-secret.yaml.j2
     dest: /tmp/argocd-repo-secret.yaml
     mode: "0600"
+  run_once: true
 
 - name: Apply ArgoCD repository credential Secret
   ansible.builtin.command: >
@@ -48,6 +53,7 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: repo_secret_apply
   changed_when: "'configured' in repo_secret_apply.stdout or 'created' in repo_secret_apply.stdout"
+  run_once: true
 
 - name: Render ArgoCD Application manifests
   ansible.builtin.template:
@@ -58,6 +64,7 @@
   loop_control:
     label: "{{ item.name }}"
   when: argocd_apps | length > 0
+  run_once: true
 
 - name: Apply ArgoCD Application manifests
   ansible.builtin.command: >
@@ -70,3 +77,4 @@
   loop_control:
     label: "{{ item.name }}"
   when: argocd_apps | length > 0
+  run_once: true
