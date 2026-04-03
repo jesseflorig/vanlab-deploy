@@ -38,4 +38,26 @@ YAML (Ansible 2.x) — follows existing project conventions: Follow standard con
 
 
 <!-- MANUAL ADDITIONS START -->
+
+## File Editing
+
+- Always use the `Edit` tool to modify existing files. NEVER use `sed`, `awk`, or shell
+  redirection to patch file content — not even as a fallback after a failed `Edit` attempt.
+- If an `Edit` fails because the `old_string` is not found, the correct response is to re-read
+  the file, find the exact text (mind whitespace, indentation, and line endings), and retry
+  the `Edit` with corrected context. Do not switch to a Bash-based workaround.
+- Before editing any file, read the section you plan to change. Never edit from memory.
+
+## Git Workflow
+
+- NEVER commit or push directly to `main`.
+- ALL work MUST happen on a feature branch named `NNN-short-description`
+  (e.g., `017-argocd-gitops`), branched from current `main`.
+- Commit work on the branch, then merge to `main` only when the work is complete.
+- After merging to `main`, push both `gitea` and `origin` remotes:
+  ```bash
+  git push gitea main && git push origin main
+  ```
+- Delete the feature branch locally after a successful merge.
+
 <!-- MANUAL ADDITIONS END -->
