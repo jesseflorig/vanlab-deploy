@@ -15,10 +15,12 @@ data:
       trusted_proxies:
         - 10.42.0.0/16
 
-  influxdb2.yaml: |
-    influxdb2:
+  influxdb.yaml: |
+    influxdb:
+      api_version: 2
       host: influxdb.home-automation.svc.cluster.local
       port: 8086
+      ssl: false
       token: !env_var INFLUXDB_TOKEN
       organization: !env_var INFLUXDB_ORG_ID
       bucket: homeassistant
