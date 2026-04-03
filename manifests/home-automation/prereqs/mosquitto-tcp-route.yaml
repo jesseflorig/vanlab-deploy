@@ -1,40 +1,22 @@
 ---
-# Service exposing Mosquitto's MQTTS listener (port 8883) for Traefik TCP routing.
-# The chart-managed service only exposes 1883/9001; this is separate.
-apiVersion: v1
-kind: Service
-metadata:
-  name: mosquitto-mqtts
-  namespace: home-automation
-  annotations:
-    argocd.argoproj.io/sync-wave: "4"
-spec:
-  selector:
-    app.kubernetes.io/name: mosquitto
-    app.kubernetes.io/instance: mosquitto
-    app.kubernetes.io/component: broker
-  ports:
-    - port: 8883
-      targetPort: 8883
-      protocol: TCP
----
-# TCP IngressRoute: routes mqtt.fleet1.cloud:8883 → mosquitto-mqtts:8883
-# TLS passthrough — Mosquitto terminates TLS itself using the home-automation-ca cert.
+# TCP IngressRoute: routes mqtt.fleet1.cloud:8883 → mosquitto:8883
+# TLS passthrough — Mosquitto terminates TLS using the home-automation-ca cert.
 # Traefik reads the SNI from the unencrypted ClientHello to match the rule.
+# sync wave 7: after the mosquitto Service (wave 6) exists.
 apiVersion: traefik.io/v1alpha1
 kind: IngressRouteTCP
 metadata:
   name: mosquitto-mqtts
   namespace: home-automation
   annotations:
-    argocd.argoproj.io/sync-wave: "4"
+    argocd.argoproj.io/sync-wave: "7"
 spec:
   entryPoints:
     - mqtts
   routes:
     - match: HostSNI(`mqtt.fleet1.cloud`)
       services:
-        - name: mosquitto-mqtts
+        - name: mosquitto
           port: 8883
   tls:
     passthrough: true
