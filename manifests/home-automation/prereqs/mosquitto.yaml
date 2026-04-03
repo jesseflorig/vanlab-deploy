@@ -62,6 +62,8 @@ metadata:
     configmap.reloader.stakater.com/reload: "mosquitto-config"
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: mosquitto
