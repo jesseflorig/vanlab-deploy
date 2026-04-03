@@ -2,7 +2,9 @@
 # TLS and mTLS certificates for the home automation stack.
 # sync wave 4: applied after the CA issuer chain is ready.
 
-# ── Mosquitto server TLS (Let's Encrypt) ─────────────────────────────────────
+# ── Mosquitto server TLS (internal CA) ───────────────────────────────────────
+# Issued by home-automation-ca. RP2040 firmware trusts the CA root cert only —
+# no dependency on Let's Encrypt or external PKI.
 
 apiVersion: cert-manager.io/v1
 kind: Certificate
@@ -14,10 +16,16 @@ metadata:
 spec:
   secretName: mosquitto-tls
   issuerRef:
-    name: letsencrypt-prod
+    name: home-automation-ca
     kind: ClusterIssuer
   dnsNames:
     - mqtt.fleet1.cloud
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  duration: 8760h
+  renewBefore: 720h
 ---
 # ── Mosquitto client CA bundle ────────────────────────────────────────────────
 # Issues a cert from home-automation-ca so its secret contains ca.crt.
