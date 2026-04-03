@@ -20,9 +20,6 @@ additionalVolumes:
   - name: mqtt-client-cert
     secret:
       secretName: home-assistant-mqtt-client
-  - name: influxdb-creds
-    secret:
-      secretName: home-assistant-influxdb
 
 additionalMounts:
   - name: config-extra
@@ -31,30 +28,6 @@ additionalMounts:
   - name: mqtt-client-cert
     mountPath: /certs/mqtt-client
     readOnly: true
-  - name: influxdb-creds
-    mountPath: /run/secrets/influxdb
-    readOnly: true
-
-# Init container writes InfluxDB credentials from mounted secret into secrets.yaml.
-# Runs once at pod start; idempotent (grep guards against duplicate entries).
-initContainers:
-  - name: write-influxdb-secrets
-    image: busybox:1.36
-    command:
-      - sh
-      - -c
-      - |
-        grep -q influxdb_token /config/secrets.yaml 2>/dev/null && exit 0
-        printf 'influxdb_token: %s\ninfluxdb_org_id: %s\n' \
-          "$(cat /run/secrets/influxdb/influxdb_token)" \
-          "$(cat /run/secrets/influxdb/influxdb_org_id)" \
-          >> /config/secrets.yaml
-    volumeMounts:
-      - name: influxdb-creds
-        mountPath: /run/secrets/influxdb
-        readOnly: true
-      - name: config
-        mountPath: /config
 
 ingress:
   enabled: true
@@ -71,3 +44,14 @@ ingress:
 env:
   - name: TZ
     value: America/New_York
+  # InfluxDB credentials injected as env vars; referenced via !env_var in packages/influxdb2.yaml
+  - name: INFLUXDB_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: home-assistant-influxdb
+        key: influxdb_token
+  - name: INFLUXDB_ORG_ID
+    valueFrom:
+      secretKeyRef:
+        name: home-assistant-influxdb
+        key: influxdb_org_id
