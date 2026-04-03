@@ -50,14 +50,44 @@ YAML (Ansible 2.x) — follows existing project conventions: Follow standard con
 
 ## Git Workflow
 
-- NEVER commit or push directly to `main`.
+- NEVER commit directly to `main` or merge feature branches into local `main`.
 - ALL work MUST happen on a feature branch named `NNN-short-description`
   (e.g., `017-argocd-gitops`), branched from current `main`.
-- Commit work on the branch, then merge to `main` only when the work is complete.
-- After merging to `main`, push both `gitea` and `origin` remotes:
-  ```bash
-  git push gitea main && git push origin main
-  ```
-- Delete the feature branch locally after a successful merge.
+- Local `main` is a read-only mirror — only ever updated via `git pull` after a
+  remote merge completes.
+
+**Branch lifecycle:**
+
+1. Branch from `main`: `git checkout -b NNN-short-description`
+2. Commit work on the branch.
+3. Push branch to both remotes:
+   ```bash
+   git push gitea NNN-short-description
+   git push origin NNN-short-description
+   ```
+4. Merge into Gitea `main` via API (Gitea enforces server-side branch protection):
+   ```bash
+   # Create PR
+   curl -sk -X POST "https://10.1.20.11:30443/api/v1/repos/gitadmin/vanlab/pulls" \
+     -H "Host: gitea.fleet1.cloud" -u "gitadmin:$GITEA_PASS" \
+     -H "Content-Type: application/json" \
+     -d '{"title":"...","head":"NNN-short-description","base":"main"}'
+   # Merge PR (use PR number from response)
+   curl -sk -X POST "https://10.1.20.11:30443/api/v1/repos/gitadmin/vanlab/pulls/N/merge" \
+     -H "Host: gitea.fleet1.cloud" -u "gitadmin:$GITEA_PASS" \
+     -H "Content-Type: application/json" \
+     -d '{"Do":"merge"}'
+   ```
+5. Pull the merged `main` locally and update GitHub mirror:
+   ```bash
+   git checkout main && git pull gitea main
+   git push origin main
+   ```
+6. Delete the feature branch locally and on Gitea:
+   ```bash
+   git branch -d NNN-short-description
+   curl -sk -X DELETE "https://10.1.20.11:30443/api/v1/repos/gitadmin/vanlab/branches/NNN-short-description" \
+     -H "Host: gitea.fleet1.cloud" -u "gitadmin:$GITEA_PASS"
+   ```
 
 <!-- MANUAL ADDITIONS END -->
