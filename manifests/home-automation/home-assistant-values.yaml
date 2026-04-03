@@ -47,14 +47,3 @@ ingress:
 env:
   - name: TZ
     value: America/New_York
-  # InfluxDB credentials injected as env vars; referenced via !env_var in packages/influxdb.yaml
-  - name: INFLUXDB_TOKEN
-    valueFrom:
-      secretKeyRef:
-        name: home-assistant-influxdb
-        key: influxdb_token
-  - name: INFLUXDB_ORG_ID
-    valueFrom:
-      secretKeyRef:
-        name: home-assistant-influxdb
-        key: influxdb_org_id
