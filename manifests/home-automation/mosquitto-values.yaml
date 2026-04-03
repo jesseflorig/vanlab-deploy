@@ -1,13 +1,15 @@
 ---
 # Mosquitto Helm values — helmforgedev/mosquitto 1.0.7
-# Managed by ArgoCD; generated from roles/mosquitto/templates/values.yaml.j2
+# Managed by ArgoCD.
+#
+# Auth model:
+#   - MQTTS on port 8883 (TLS terminated by Mosquitto, cert from home-automation-ca)
+#   - RP2040 devices:        TLS + username/password
+#   - HA / Node-RED internal: TLS + client certificate (cafile set; require_certificate false)
+#   - Plain 1883/9001 listeners remain (chart default); not exposed externally
 
 image:
   tag: "2.0.22"
-
-service:
-  type: LoadBalancer
-  port: 8883
 
 persistence:
   enabled: true
@@ -17,30 +19,17 @@ persistence:
 podAnnotations:
   reloader.stakater.com/auto: "true"
 
-mosquitto:
-  config: |
-    # Disable plaintext listener — MQTTS only
+broker:
+  extraConfig: |
+    # MQTTS listener — Mosquitto terminates TLS, password auth required
     listener 8883
     protocol mqtt
-
-    # Server TLS certificate (Let's Encrypt, mounted from mosquitto-tls Secret)
-    cafile  /certs/server/ca.crt
     certfile /certs/server/tls.crt
     keyfile  /certs/server/tls.key
-
-    # Client certificate enforcement (mTLS)
-    cafile  /certs/client-ca/ca.crt
-    require_certificate true
-    use_identity_as_username true
-
-    # Password file
+    cafile   /certs/client-ca/ca.crt
+    require_certificate false
+    allow_anonymous false
     password_file /mosquitto/passwd/passwordfile
-
-    persistence true
-    persistence_location /mosquitto/data/
-
-    log_dest stdout
-    log_type all
 
 extraVolumes:
   - name: server-tls

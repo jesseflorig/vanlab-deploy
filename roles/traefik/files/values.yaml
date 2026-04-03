@@ -18,6 +18,11 @@ ports:
     exposedPort: 443
     protocol: TCP
     nodePort: 30443
+  mqtts:
+    port: 8883
+    exposedPort: 8883
+    protocol: TCP
+    nodePort: 30883
 
 ingressRoute:
   dashboard:
