@@ -1,21 +1,24 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.2.0 → 1.3.0
-Modified principles: None (existing principles unchanged)
+Version change: 1.3.0 → 1.4.0
+Modified principles:
+  - Principle IV: Secrets Hygiene — extended: application secrets needed by ArgoCD workloads
+    MUST be stored as SealedSecrets; raw Kubernetes Secrets committed to Git are prohibited
+  - Principle XI: GitOps Application Deployment — major expansion:
+    * Explicit infra/app boundary with enumerated list of Ansible-only infrastructure
+    * Helm-based application services MUST use multi-source ArgoCD Applications
+    * prereqs/ pattern mandated for resources that must precede Helm chart deployment
+    * Ansible MUST NOT perform Helm installs for application workloads (ArgoCD only)
 Added sections:
-  - Principle IX: Secure Service Exposure (HTTPS/MQTTS for all externally accessible services)
-  - Principle X: Intra-Cluster Service Locality (CoreDNS overrides for cluster-to-cluster traffic)
-  - Principle XI: GitOps Application Deployment (split manifests under manifests/, ArgoCD sync)
-  - Technology Stack: added Gitea, ArgoCD, manifests/ structure
-  - Deployment Workflow: updated to reflect GitOps layer
+  - Technology Stack: added Sealed Secrets controller
+  - Deployment Workflow: added seal-secrets.yml step; updated Application Workloads procedure
 Removed sections: None
 Templates requiring updates:
-  - .specify/templates/plan-template.md ✅ — Constitution Check gates align with IX/X/XI
-  - .specify/templates/spec-template.md ✅ — No mandatory sections added/removed
-  - .specify/templates/tasks-template.md ✅ — No structural changes required
-  - .specify/templates/agent-file-template.md ✅ — No principle-named references
-  - .specify/templates/constitution-template.md ✅ — Source template; no changes required
+  - .specify/templates/plan-template.md — Constitution Check gates should include IV (SealedSecrets)
+    and the Helm/multi-source requirement from XI
+  - .specify/templates/tasks-template.md — Task phases for Helm services should include
+    sealed-secrets.yaml generation and prereqs/ manifests tasks
 Deferred TODOs: None — all placeholders resolved.
 -->
 
@@ -55,17 +58,24 @@ reduces recovery time and cognitive overhead.
 ### IV. Secrets Hygiene
 
 Secrets, tokens, credentials, keys, certificate private keys, and CA material MUST never be
-committed to the repository. Use `group_vars/example.all.yml` as the template; real values
-MUST be provided via an untracked `group_vars/all.yml` or an external secrets mechanism
-(e.g., Ansible Vault, environment variables). The `.gitignore` MUST exclude all files
-containing live secrets or private key material.
+committed to the repository in plaintext. Use `group_vars/example.all.yml` as the template;
+real values MUST be provided via an untracked `group_vars/all.yml`. The `.gitignore` MUST
+exclude all files containing live secrets or private key material.
+
+**Application secrets that must be present in Git** (e.g., to be applied by ArgoCD) MUST be
+stored as `SealedSecret` resources encrypted with the cluster's Sealed Secrets controller
+public key. Raw Kubernetes `Secret` manifests committed to the repository are prohibited.
+The `playbooks/utilities/seal-secrets.yml` utility MUST be used to generate `SealedSecret`
+YAML from values in `group_vars/all.yml`; the resulting encrypted YAML is safe to commit.
 
 The PKI lifecycle — CA creation, certificate issuance, and rotation — MUST be managed as code
-via a tool such as `cert-manager`, `step-ca`, or Ansible-managed PKI roles. No certificates
-or keys MAY be generated manually outside the repository workflow.
+via `cert-manager`. No certificates or keys MAY be generated manually outside the repository
+workflow.
 
 **Rationale**: The repository may be public or shared. Leaked credentials or private keys can
 compromise the home network, exposed services, and any devices authenticating via certificates.
+SealedSecrets allow encrypted secret material to live in Git (enabling full GitOps) while
+remaining unreadable to anyone without the cluster's private key.
 
 ### V. Simplicity
 
@@ -159,24 +169,69 @@ traffic on the LAN ensures service connectivity is independent of internet avail
 
 ### XI. GitOps Application Deployment
 
-Application workloads MUST be defined as Kubernetes manifests and synced to the cluster via
-ArgoCD. Infrastructure components (Helm-managed: Traefik, cert-manager, Longhorn, Gitea,
-ArgoCD itself) remain Ansible-managed and are excluded from this principle.
+All services that are not cluster infrastructure MUST be deployed and managed exclusively
+through ArgoCD. Ansible MUST NOT perform Helm installs for application workloads.
 
-- Application manifests MUST live under `manifests/` at the repository root, organized in
-  per-app subdirectories (e.g., `manifests/static-site/`, `manifests/my-app/`)
-- Each app subdirectory MUST map to exactly one ArgoCD `Application` resource registered via
-  the `argocd_apps` variable in `group_vars/all.yml`
-- ArgoCD Applications MUST be configured with `automated.prune: true` and
-  `automated.selfHeal: true` so the cluster state always converges to the Git state
-- Manifests MUST be pushed to the Gitea repository (`gitea.fleet1.cloud`) and synced from
-  there; ArgoCD MUST NOT sync directly from GitHub
-- New application workloads MUST NOT be deployed via `kubectl apply` or Ansible `command`
-  tasks; the GitOps loop is the sole deployment mechanism for application manifests
+#### Infrastructure/application boundary
 
-**Rationale**: GitOps provides a single source of truth for cluster application state, enables
-git-driven rollbacks (revert a commit → ArgoCD restores prior state), and makes every
-deployment auditable via the Gitea commit history.
+The following are **infrastructure** — Ansible-managed, never migrated to ArgoCD:
+
+| Component | Reason |
+|-----------|--------|
+| K3s | The orchestration layer itself |
+| Traefik | Ingress controller — must exist before any service is reachable |
+| cert-manager | PKI — TLS certs must precede service startup |
+| Longhorn | Storage — PVCs must precede stateful workload startup |
+| Sealed Secrets controller | Must exist before ArgoCD can decrypt any SealedSecret |
+| Gitea | ArgoCD source-of-truth — must precede ArgoCD bootstrap |
+| ArgoCD | GitOps controller — cannot manage its own bootstrap |
+| kube-prometheus-stack | Cluster observability infrastructure |
+
+Everything else is an **application workload** and MUST be managed by ArgoCD.
+
+#### Manifest layout
+
+- Application manifests MUST live under `manifests/` at the repository root
+- Helm-based services MUST follow the `prereqs/` + `apps/` + values file pattern:
+  ```
+  manifests/<namespace>/
+  ├── prereqs/                  ← ArgoCD Application (namespace, certs, SealedSecrets, ConfigMaps)
+  │   ├── namespace.yaml        (sync wave 0)
+  │   ├── <supporting>.yaml     (sync waves 1–N, ordered by dependency)
+  │   └── sealed-secrets.yaml   (generated by seal-secrets.yml — MUST NOT be hand-edited)
+  ├── apps/                     ← ArgoCD Application (child Application CRs)
+  │   └── <service>-app.yaml    multi-source Application: Helm chart + values from this repo
+  └── <service>-values.yaml     Helm values file (no secret values; secrets via SealedSecrets)
+  ```
+- Helm chart Applications MUST use the **multi-source** pattern: one source is the upstream
+  Helm chart repo (public), the second source is this Gitea repo supplying the values file
+- Helm values files MUST NOT contain secret values; all secrets MUST be injected via
+  SealedSecrets (see Principle IV) and referenced in values via `secretKeyRef` or `!env_var`
+
+#### ArgoCD Application requirements
+
+- Applications MUST be configured with `automated.prune: true` and `automated.selfHeal: true`
+- Applications MUST use `retry.limit ≥ 5` with exponential backoff to tolerate prerequisite
+  ordering delays (SealedSecrets decryption, cert issuance, etc.)
+- Applications MUST target the Gitea repository (`gitea.fleet1.cloud`); ArgoCD MUST NOT sync
+  directly from GitHub
+- Applications MUST be registered in `argocd_apps` in `group_vars/all.yml` and applied via
+  `--tags argocd-bootstrap`; manual `kubectl apply` of Application CRs is prohibited
+
+#### Ansible role responsibilities for application workloads
+
+Ansible roles for application workloads are retained only as an **initial bootstrap fallback**
+(e.g., during a fresh cluster build before ArgoCD is running). Once ArgoCD is managing a
+workload, the Ansible role MUST NOT be run again for normal operations. Roles MUST NOT:
+
+- Perform `helm upgrade --install` for workloads that ArgoCD manages
+- Create Kubernetes Secrets directly (use SealedSecrets instead)
+- Apply manifests that are managed by ArgoCD (causes ownership conflicts)
+
+**Rationale**: ArgoCD as the sole deployment mechanism provides a single source of truth,
+git-driven rollbacks, drift detection, and a complete audit trail. Ansible-managed Helm
+releases cannot benefit from these properties and create split-ownership conflicts that
+undermine the GitOps model.
 
 ## Technology Stack
 
@@ -187,10 +242,15 @@ The canonical technology choices for this project are:
 - **Package management**: Helm — charts managed via `roles/helm/` and `services-deploy.yml`
 - **GitOps**: ArgoCD — syncs application manifests from `manifests/` in the Gitea repository;
   installed via `roles/argocd/`; bootstrapped via `roles/argocd-bootstrap/`
+- **Secret encryption**: Bitnami Sealed Secrets — controller runs in `kube-system`; installed
+  via `roles/sealed-secrets/`; `kubeseal` CLI installed on cluster nodes; `SealedSecret`
+  resources (AES-256 encrypted) are safe to commit to Git; the `seal-secrets.yml` utility
+  generates them from `group_vars/all.yml`; cluster-scoped (secrets sealed for this cluster
+  cannot be decrypted by any other cluster)
 - **Git hosting**: Gitea — self-hosted at `gitea.fleet1.cloud`; installed via `roles/gitea/`;
   serves as the ArgoCD source-of-truth repository
-- **Application manifests**: `manifests/<app-name>/` — one subdirectory per ArgoCD Application;
-  each directory contains plain Kubernetes YAML synced automatically to the cluster
+- **Application manifests**: `manifests/<namespace>/` — prereqs (certs, SealedSecrets,
+  ConfigMaps) + apps (multi-source Helm ArgoCD Applications) + values files; see Principle XI
 - **Storage**: Longhorn v1.11.1 — distributed block storage using the `longhorn` StorageClass;
   data stored at `/var/lib/longhorn` on each node's local NVMe disk; installed via
   `https://charts.longhorn.io`; requires `open-iscsi` and `nfs-common` on all nodes
@@ -222,6 +282,7 @@ Deviations from this stack MUST be documented in `README.md` with a rationale.
 1. **Verify hosts**: `ansible-playbook -i hosts.ini check_hosts.yml`
 2. **Deploy cluster**: `ansible-playbook -i hosts.ini playbooks/cluster/k3s-deploy.yml`
 3. **Deploy services**: `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml`
+   (includes Sealed Secrets controller install)
 4. **Bootstrap GitOps**: `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags argocd-bootstrap`
 
 - Playbooks MUST be run in the order above for a fresh cluster.
@@ -231,14 +292,26 @@ Deviations from this stack MUST be documented in `README.md` with a rationale.
 
 ### Application Workloads (GitOps-managed)
 
-1. Add or update manifests under `manifests/<app-name>/`
-2. Register the app in `argocd_apps` in `group_vars/all.yml` (first deployment only)
-3. Re-run `--tags argocd-bootstrap` to register new ArgoCD Applications (first deployment only)
-4. Commit and push to Gitea (`git push gitea main`)
-5. ArgoCD automatically syncs within 3 minutes; monitor via `https://argocd.fleet1.cloud`
+**New Helm-based service:**
+
+1. Add `manifests/<namespace>/prereqs/` with namespace, cert-manager resources, SealedSecrets
+   placeholder, and ConfigMaps (use sync waves to express dependency order)
+2. Add `manifests/<namespace>/apps/<service>-app.yaml` (multi-source ArgoCD Application)
+3. Add `manifests/<namespace>/<service>-values.yaml` (Helm values; no secret values)
+4. Run `ansible-playbook playbooks/utilities/seal-secrets.yml` to generate `sealed-secrets.yaml`
+5. Commit all files including the generated SealedSecrets and push to Gitea (`git push gitea main`)
+6. Register apps in `argocd_apps` in `group_vars/all.yml` and re-run `--tags argocd-bootstrap`
+7. ArgoCD automatically syncs; monitor via `https://argocd.fleet1.cloud`
+
+**Day-2 changes to an existing service:**
+
+- **Config / values change**: edit `*-values.yaml` or manifests → commit → push → ArgoCD syncs
+- **Secret rotation**: update `group_vars/all.yml` → re-run `seal-secrets.yml` → commit → push
+- **Chart version upgrade**: update `targetRevision` in `*-app.yaml` → commit → push
+- **Rollback**: revert the commit in Gitea → ArgoCD restores prior state within 3 minutes
 
 - Direct `kubectl apply` of application manifests is prohibited (see Principle XI).
-- Rollbacks are performed by reverting the Git commit in Gitea; ArgoCD restores prior state.
+- Ansible MUST NOT be used to deploy, upgrade, or configure application workloads post-bootstrap.
 
 ## Governance
 
@@ -256,4 +329,4 @@ Idempotency (II), Secrets Hygiene (IV), Persistent Storage (VIII), Secure Servic
 (IX), and GitOps Deployment (XI). Complexity violations MUST be justified in the PR
 description before merging.
 
-**Version**: 1.3.0 | **Ratified**: 2026-03-27 | **Last Amended**: 2026-03-31
+**Version**: 1.4.0 | **Ratified**: 2026-03-27 | **Last Amended**: 2026-04-03
