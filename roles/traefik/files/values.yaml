@@ -21,7 +21,10 @@ ports:
 
 ingressRoute:
   dashboard:
-    enabled: false
+    enabled: true
+    entryPoints:
+      - websecure
+    matchRule: Host(`traefik.fleet1.cloud`)
 
 providers:
   kubernetesCRD:
