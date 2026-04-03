@@ -1,0 +1,144 @@
+---
+# Mosquitto MQTT broker — raw manifests replacing helmforgedev/mosquitto chart.
+# MQTTS-only (port 8883). No plain 1883/9001 listeners.
+# Auth: TLS (home-automation-ca server cert) + username/password.
+# sync wave 6: after certs (4) and secrets (5) are ready.
+
+# ── Config ────────────────────────────────────────────────────────────────────
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mosquitto-config
+  namespace: home-automation
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+data:
+  mosquitto.conf: |
+    listener 8883
+    protocol mqtt
+    certfile /certs/server/tls.crt
+    keyfile  /certs/server/tls.key
+    cafile   /certs/client-ca/ca.crt
+    require_certificate false
+    allow_anonymous false
+    password_file /mosquitto/passwd/passwordfile
+    persistence true
+    persistence_location /mosquitto/data/
+    log_dest stdout
+    log_type error
+    log_type warning
+    log_type notice
+    log_type information
+
+---
+# ── Persistent storage ────────────────────────────────────────────────────────
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mosquitto-data
+  namespace: home-automation
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# ── Deployment ────────────────────────────────────────────────────────────────
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mosquitto
+  namespace: home-automation
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+    configmap.reloader.stakater.com/reload: "mosquitto-config"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mosquitto
+  template:
+    metadata:
+      labels:
+        app: mosquitto
+    spec:
+      containers:
+        - name: mosquitto
+          image: eclipse-mosquitto:2.0.22
+          ports:
+            - containerPort: 8883
+              name: mqtts
+          volumeMounts:
+            - name: config
+              mountPath: /mosquitto/config/mosquitto.conf
+              subPath: mosquitto.conf
+              readOnly: true
+            - name: data
+              mountPath: /mosquitto/data
+            - name: server-tls
+              mountPath: /certs/server
+              readOnly: true
+            - name: client-ca
+              mountPath: /certs/client-ca
+              readOnly: true
+            - name: passwd
+              mountPath: /mosquitto/passwd
+              readOnly: true
+          livenessProbe:
+            tcpSocket:
+              port: 8883
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: 8883
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: mosquitto-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: mosquitto-data
+        - name: server-tls
+          secret:
+            secretName: mosquitto-tls
+        - name: client-ca
+          secret:
+            secretName: mosquitto-client-ca
+            items:
+              - key: ca.crt
+                path: ca.crt
+        - name: passwd
+          secret:
+            secretName: mosquitto-passwords
+
+---
+# ── Service ───────────────────────────────────────────────────────────────────
+# MQTTS only. Internal cluster clients connect to mosquitto.home-automation:8883.
+# Traefik TCP route (mosquitto-tcp-route.yaml) also targets this service.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mosquitto
+  namespace: home-automation
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+spec:
+  selector:
+    app: mosquitto
+  ports:
+    - port: 8883
+      targetPort: 8883
+      protocol: TCP
+      name: mqtts
