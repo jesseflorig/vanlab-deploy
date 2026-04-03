@@ -92,16 +92,6 @@ spec:
             - name: passwd
               mountPath: /mosquitto/passwd
               readOnly: true
-          livenessProbe:
-            tcpSocket:
-              port: 8883
-            initialDelaySeconds: 10
-            periodSeconds: 30
-          readinessProbe:
-            tcpSocket:
-              port: 8883
-            initialDelaySeconds: 5
-            periodSeconds: 10
       volumes:
         - name: config
           configMap:
