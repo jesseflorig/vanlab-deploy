@@ -24,8 +24,22 @@
       tags: [gitea]
     - role: argocd
       tags: [argocd]
+    - role: sealed-secrets
+      tags: [sealed-secrets]
     - role: argocd-bootstrap
       tags: [argocd-bootstrap]
+    # ── Home automation stack (Ansible-managed, superseded by ArgoCD) ─────────
+    # These roles perform the initial Helm install and prerequisite setup.
+    # Once ArgoCD is managing the stack (after running seal-secrets.yml and
+    # re-running argocd-bootstrap), these can be removed from this playbook.
+    - role: mosquitto
+      tags: [home-automation, mosquitto]
+    - role: influxdb
+      tags: [home-automation, influxdb]
+    - role: home-assistant
+      tags: [home-automation, hass]
+    - role: node-red
+      tags: [home-automation, node-red]
 
 - name: Deploy services to agent nodes
   hosts: agents

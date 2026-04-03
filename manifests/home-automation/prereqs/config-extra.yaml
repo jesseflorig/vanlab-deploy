@@ -1,0 +1,24 @@
+---
+# Home Assistant extra config packages, mounted at /config/packages/.
+# sync wave 4: applied alongside certificates.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: home-assistant-config-extra
+  namespace: home-automation
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+data:
+  http.yaml: |
+    http:
+      use_x_forwarded_for: true
+      trusted_proxies:
+        - 10.42.0.0/16
+
+  influxdb2.yaml: |
+    influxdb2:
+      host: influxdb.home-automation.svc.cluster.local
+      port: 8086
+      token: !secret influxdb_token
+      organization: !secret influxdb_org_id
+      bucket: homeassistant
