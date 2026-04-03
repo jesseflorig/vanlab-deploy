@@ -1,0 +1,8 @@
+---
+sealed_secrets_chart_version: "2.16.2"
+sealed_secrets_namespace: kube-system
+sealed_secrets_controller_name: sealed-secrets-controller
+
+# kubeseal CLI version to install on servers for the seal-secrets utility playbook.
+# Must match the controller major.minor version.
+kubeseal_version: "0.27.3"

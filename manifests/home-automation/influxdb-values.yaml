@@ -1,0 +1,29 @@
+---
+# InfluxDB 2.x Helm values — influxdata/influxdb2 2.1.2
+# Managed by ArgoCD; generated from roles/influxdb/templates/values.yaml.j2
+
+image:
+  tag: "2.7.4-alpine"
+
+adminUser:
+  organization: vanlab
+  bucket: homeassistant
+  existingSecret: influxdb-auth
+
+persistence:
+  enabled: true
+  storageClass: longhorn
+  size: 20Gi
+  accessMode: ReadWriteOnce
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+  hostname: influxdb.fleet1.cloud
+
+service:
+  type: ClusterIP
+  port: 8086

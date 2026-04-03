@@ -1,0 +1,45 @@
+---
+# Internal CA chain for MQTT client certificate mTLS.
+# sync wave 1: ClusterIssuers and CA Certificate must exist before client certs.
+#
+# Resources (applied in order via sync waves):
+#   wave 1 — selfsigned-issuer ClusterIssuer (bootstraps the CA)
+#   wave 2 — home-automation-ca Certificate (self-signed CA in cert-manager ns)
+#   wave 3 — home-automation-ca ClusterIssuer (signs client certs using the CA key)
+
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-issuer
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: home-automation-ca
+  namespace: cert-manager
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  isCA: true
+  commonName: home-automation-ca
+  secretName: home-automation-ca-secret
+  privateKey:
+    algorithm: RSA
+    size: 4096
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: home-automation-ca
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  ca:
+    secretName: home-automation-ca-secret

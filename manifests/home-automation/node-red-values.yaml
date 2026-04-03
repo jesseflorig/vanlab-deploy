@@ -1,0 +1,44 @@
+---
+# Node-RED Helm values — schwarzit/node-red 0.40.1
+# Managed by ArgoCD; generated from roles/node-red/templates/values.yaml.j2
+
+image:
+  repository: nodered/node-red
+  tag: "4.1.2"
+
+persistence:
+  enabled: true
+  storageClass: longhorn
+  size: 5Gi
+  accessMode: ReadWriteOnce
+
+ingress:
+  enabled: true
+  ingressClassName: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+  hosts:
+    - host: node-red.fleet1.cloud
+      paths:
+        - path: /
+          pathType: Prefix
+
+env:
+  - name: NODE_RED_CREDENTIAL_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: node-red-admin
+        key: credential-secret
+  - name: TZ
+    value: America/New_York
+
+extraVolumes:
+  - name: mqtt-client-cert
+    secret:
+      secretName: node-red-mqtt-client
+
+extraVolumeMounts:
+  - name: mqtt-client-cert
+    mountPath: /certs/mqtt-client
+    readOnly: true

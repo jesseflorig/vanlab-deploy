@@ -1,0 +1,37 @@
+---
+# ArgoCD Application: Home Assistant Core
+# Multi-source: Helm chart from pajikos + values from this repo.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: home-assistant
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: http://pajikos.github.io/home-assistant-helm-chart/
+      chart: home-assistant
+      targetRevision: "0.3.52"
+      helm:
+        valueFiles:
+          - $values/manifests/home-automation/home-assistant-values.yaml
+    - repoURL: https://gitea.fleet1.cloud:30443/gitadmin/vanlab.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: home-automation
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 10m

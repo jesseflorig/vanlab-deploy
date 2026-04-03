@@ -1,0 +1,8 @@
+---
+# sync wave 0 — namespace must exist before all other resources.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: home-automation
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"

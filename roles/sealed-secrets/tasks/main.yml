@@ -1,0 +1,77 @@
+---
+# Install Bitnami Sealed Secrets controller and kubeseal CLI.
+# Controller runs in kube-system; kubeseal is installed for use by seal-secrets.yml.
+
+# ── Helm: Sealed Secrets controller ──────────────────────────────────────────
+
+- name: Add Bitnami Sealed Secrets Helm repo
+  ansible.builtin.command: helm repo add sealed-secrets https://bitnami-labs.github.io/sealed-secrets
+  register: sealed_repo
+  changed_when: "'has been added' in sealed_repo.stdout"
+  failed_when:
+    - sealed_repo.rc != 0
+    - "'already exists' not in sealed_repo.stderr | lower"
+  run_once: true
+
+- name: Update Helm repos
+  ansible.builtin.command: helm repo update
+  changed_when: false
+  run_once: true
+
+- name: Install Sealed Secrets controller via Helm
+  ansible.builtin.command: >
+    helm upgrade --install sealed-secrets sealed-secrets/sealed-secrets
+    --namespace {{ sealed_secrets_namespace }}
+    --version {{ sealed_secrets_chart_version }}
+    --set fullnameOverride={{ sealed_secrets_controller_name }}
+    --wait
+    --timeout 3m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: sealed_install
+  changed_when: >
+    'has been deployed' in sealed_install.stdout or
+    'has been upgraded' in sealed_install.stdout
+  run_once: true
+
+- name: Wait for Sealed Secrets controller rollout
+  ansible.builtin.command: >
+    kubectl rollout status deployment/{{ sealed_secrets_controller_name }}
+    -n {{ sealed_secrets_namespace }}
+    --timeout=3m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+# ── kubeseal CLI (arm64) ──────────────────────────────────────────────────────
+
+- name: Check if kubeseal is already installed at correct version
+  ansible.builtin.command: kubeseal --version
+  register: kubeseal_current
+  changed_when: false
+  failed_when: false
+  run_once: true
+
+- name: Download and install kubeseal {{ kubeseal_version }} (arm64)
+  ansible.builtin.shell: |
+    set -e
+    TMPDIR=$(mktemp -d)
+    curl -sSL "https://github.com/bitnami-labs/sealed-secrets/releases/download/v{{ kubeseal_version }}/kubeseal-{{ kubeseal_version }}-linux-arm64.tar.gz" \
+      -o "${TMPDIR}/kubeseal.tar.gz"
+    tar -xzf "${TMPDIR}/kubeseal.tar.gz" -C "${TMPDIR}"
+    install -m 755 "${TMPDIR}/kubeseal" /usr/local/bin/kubeseal
+    rm -rf "${TMPDIR}"
+  when: >
+    kubeseal_current.rc != 0 or
+    kubeseal_version not in kubeseal_current.stdout
+  changed_when: true
+  run_once: true
+
+- name: Display Sealed Secrets deployment summary
+  ansible.builtin.debug:
+    msg: >
+      Sealed Secrets controller running in {{ sealed_secrets_namespace }}.
+      kubeseal {{ kubeseal_version }} installed at /usr/local/bin/kubeseal.
+      Run: ansible-playbook playbooks/utilities/seal-secrets.yml
+  run_once: true

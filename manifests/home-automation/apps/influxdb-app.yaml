@@ -1,0 +1,37 @@
+---
+# ArgoCD Application: InfluxDB 2.x
+# Multi-source: Helm chart from influxdata + values from this repo.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: influxdb
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://helm.influxdata.com/
+      chart: influxdb2
+      targetRevision: "2.1.2"
+      helm:
+        valueFiles:
+          - $values/manifests/home-automation/influxdb-values.yaml
+    - repoURL: https://gitea.fleet1.cloud:30443/gitadmin/vanlab.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: home-automation
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 10m

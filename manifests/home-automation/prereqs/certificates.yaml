@@ -1,0 +1,82 @@
+---
+# TLS and mTLS certificates for the home automation stack.
+# sync wave 4: applied after the CA issuer chain is ready.
+
+# ── Mosquitto server TLS (Let's Encrypt) ─────────────────────────────────────
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mosquitto-tls
+  namespace: home-automation
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  secretName: mosquitto-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - mqtt.fleet1.cloud
+---
+# ── Mosquitto client CA bundle ────────────────────────────────────────────────
+# Issues a cert from home-automation-ca so its secret contains ca.crt.
+# Mosquitto uses ca.crt to verify MQTT client certificates.
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mosquitto-client-ca-bundle
+  namespace: home-automation
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  secretName: mosquitto-client-ca
+  commonName: mosquitto-ca-bundle
+  issuerRef:
+    name: home-automation-ca
+    kind: ClusterIssuer
+  duration: 87600h    # 10 years — bundle only; private key unused by Mosquitto
+  renewBefore: 720h
+  usages:
+    - digital signature
+---
+# ── Home Assistant MQTT client certificate ────────────────────────────────────
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: home-assistant-mqtt-client
+  namespace: home-automation
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  secretName: home-assistant-mqtt-client
+  commonName: home-assistant
+  issuerRef:
+    name: home-automation-ca
+    kind: ClusterIssuer
+  usages:
+    - client auth
+  duration: 8760h
+  renewBefore: 720h
+---
+# ── Node-RED MQTT client certificate ─────────────────────────────────────────
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: node-red-mqtt-client
+  namespace: home-automation
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  secretName: node-red-mqtt-client
+  commonName: node-red
+  issuerRef:
+    name: home-automation-ca
+    kind: ClusterIssuer
+  usages:
+    - client auth
+  duration: 8760h
+  renewBefore: 720h

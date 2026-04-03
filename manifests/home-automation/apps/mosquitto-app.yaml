@@ -1,0 +1,37 @@
+---
+# ArgoCD Application: Mosquitto MQTT broker
+# Multi-source: Helm chart from helmforgedev + values from this repo.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mosquitto
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://helmforgedev.github.io/charts
+      chart: mosquitto
+      targetRevision: "1.0.7"
+      helm:
+        valueFiles:
+          - $values/manifests/home-automation/mosquitto-values.yaml
+    - repoURL: https://gitea.fleet1.cloud:30443/gitadmin/vanlab.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: home-automation
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 10m
