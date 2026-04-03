@@ -46,7 +46,9 @@ argocd_admin_password_bcrypt: <ARGOCD_ADMIN_PASSWORD_BCRYPT_HASH>
 gitea_argocd_token: <GITEA_ARGOCD_PAT_TOKEN>
 
 # ArgoCD applications (used by services-deploy.yml → argocd-bootstrap role)
-# Each entry registers a GitOps app synced from the vanlab repo in Gitea
+# Each entry registers a GitOps app synced from the vanlab repo in Gitea.
+# home-automation-prereqs and home-automation-apps require seal-secrets.yml to
+# have been run and committed before registering (see README — Sealed Secrets).
 argocd_apps:
   - name: static-site
     repo: gitadmin/vanlab.git
@@ -58,3 +60,46 @@ argocd_apps:
     path: manifests/redirects
     namespace: traefik
     revision: main
+  - name: home-automation-prereqs
+    repo: gitadmin/vanlab.git
+    path: manifests/home-automation/prereqs
+    namespace: home-automation
+    revision: main
+  - name: home-automation-apps
+    repo: gitadmin/vanlab.git
+    path: manifests/home-automation/apps
+    namespace: argocd
+    revision: main
+
+# ── Home Automation Stack ─────────────────────────────────────────────────────
+# Used by: services-deploy.yml → mosquitto, influxdb, home-assistant, node-red roles
+#          playbooks/utilities/seal-secrets.yml (seals secrets for ArgoCD GitOps)
+#
+# Deployment order (first time):
+#   1. Fill all values below
+#   2. ansible-playbook services-deploy.yml (deploys controller + Helm charts)
+#   3. Log in to InfluxDB, copy org ID from URL, set influxdb_org_id below
+#   4. ansible-playbook utilities/seal-secrets.yml
+#      git add manifests/home-automation/prereqs/sealed-secrets.yaml && git commit && git push gitea main
+#   5. ansible-playbook services-deploy.yml --tags argocd-bootstrap
+#
+# To rotate a secret after initial setup:
+#   Update value below → re-run seal-secrets.yml → commit → push → ArgoCD auto-syncs
+
+# InfluxDB 2.x credentials
+influxdb_admin_password: <INFLUXDB_ADMIN_PASSWORD>
+# Generate a random 64-char token: openssl rand -hex 32
+influxdb_admin_token: <INFLUXDB_ADMIN_TOKEN>
+# Fill AFTER first InfluxDB login — copy hex UUID from the URL bar (/orgs/<hex-id>)
+influxdb_org_id: <INFLUXDB_ORG_ID_HEX>
+
+# Mosquitto MQTT broker — password file entry for the homeassistant user
+# Generate via utility: ansible-playbook playbooks/utilities/gen-mosquitto-passwd.yml \
+#   -e "mqtt_user=homeassistant mqtt_pass=<password>"
+# Paste the full "username:hash" line as the value
+mosquitto_password_entry: "<USERNAME:HASHED_PASSWORD>"
+
+# Node-RED admin UI authentication (bcrypt hash of the admin password)
+# Generate: node -e "require('bcryptjs').hash('yourpassword', 8, (e,h) => console.log(h))"
+# Or:       htpasswd -nbBC 8 "" yourpassword | tr -d ':\n'
+node_red_admin_password_bcrypt: "<BCRYPT_HASH>"
