@@ -1,0 +1,120 @@
+---
+# Deploy Node-RED to the home-automation namespace.
+# Accessible at https://{{ nodered_hostname }} via Traefik.
+# Connects to Mosquitto via MQTTS using a client certificate from home-automation-ca.
+
+# ── Admin credentials Secret ──────────────────────────────────────────────────
+
+- name: Create Node-RED admin credentials Secret
+  ansible.builtin.shell: |
+    kubectl create secret generic node-red-admin \
+      --namespace {{ nodered_namespace }} \
+      --from-literal=admin-password-hash='{{ node_red_admin_password_bcrypt }}' \
+      --from-literal=credential-secret='{{ node_red_admin_password_bcrypt }}' \
+      --dry-run=client -o yaml | kubectl apply -f -
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+  no_log: true
+
+# ── MQTT client certificate ───────────────────────────────────────────────────
+
+- name: Render Node-RED MQTT client certificate manifest
+  ansible.builtin.template:
+    src: ../../mosquitto/templates/client-cert.yaml.j2
+    dest: /tmp/node-red-mqtt-client-cert.yaml
+    mode: "0644"
+  vars:
+    cert_name: node-red-mqtt-client
+    cert_namespace: "{{ nodered_namespace }}"
+    cert_cn: node-red
+    cert_secret_name: node-red-mqtt-client
+  run_once: true
+
+- name: Apply Node-RED MQTT client certificate
+  ansible.builtin.command: kubectl apply -f /tmp/node-red-mqtt-client-cert.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+- name: Wait for Node-RED MQTT client certificate to become Ready
+  ansible.builtin.command: >
+    kubectl wait certificate/node-red-mqtt-client
+    -n {{ nodered_namespace }}
+    --for=condition=Ready
+    --timeout=120s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+# ── Helm repo ─────────────────────────────────────────────────────────────────
+
+- name: Add SchwarzIT Node-RED Helm repo
+  ansible.builtin.command: helm repo add schwarzit https://schwarzit.github.io/node-red-chart/
+  register: schwarzit_repo
+  changed_when: "'has been added' in schwarzit_repo.stdout"
+  failed_when:
+    - schwarzit_repo.rc != 0
+    - "'already exists' not in schwarzit_repo.stderr | lower"
+  run_once: true
+
+- name: Update Helm repos
+  ansible.builtin.command: helm repo update
+  changed_when: false
+  run_once: true
+
+# ── Helm: Node-RED ────────────────────────────────────────────────────────────
+
+- name: Render Node-RED Helm values
+  ansible.builtin.template:
+    src: values.yaml.j2
+    dest: /tmp/node-red-values.yaml
+    mode: "0644"
+  run_once: true
+
+- name: Install Node-RED via Helm
+  ansible.builtin.command: >
+    helm upgrade --install node-red schwarzit/node-red
+    --namespace {{ nodered_namespace }}
+    --version {{ nodered_chart_version }}
+    --values /tmp/node-red-values.yaml
+    --wait
+    --timeout 5m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: nodered_install
+  changed_when: "'has been deployed' in nodered_install.stdout or 'has been upgraded' in nodered_install.stdout"
+  run_once: true
+
+- name: Wait for Node-RED Deployment rollout
+  ansible.builtin.command: >
+    kubectl rollout status deployment/node-red
+    -n {{ nodered_namespace }}
+    --timeout=5m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+- name: Verify Node-RED PVC is Bound
+  ansible.builtin.command: >
+    kubectl get pvc -n {{ nodered_namespace }}
+    -l app.kubernetes.io/name=node-red
+    -o jsonpath='{.items[0].status.phase}'
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: nodered_pvc
+  changed_when: false
+  failed_when: nodered_pvc.stdout != "Bound"
+  run_once: true
+
+- name: Display Node-RED deployment summary
+  ansible.builtin.debug:
+    msg: >
+      Node-RED is running — UI: https://{{ nodered_hostname }}
+      MQTT broker (in-cluster): mosquitto.{{ nodered_namespace }}.svc.cluster.local:8883
+      Client cert path (in pod): /certs/mqtt-client/
+  run_once: true

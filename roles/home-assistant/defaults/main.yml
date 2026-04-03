@@ -1,0 +1,10 @@
+---
+# Home Assistant role defaults.
+# All values may be overridden in group_vars/all.yml.
+
+ha_namespace: home-automation
+ha_chart_version: "0.3.52"
+ha_pvc_size: "10Gi"
+ha_hostname: hass.fleet1.cloud
+ha_image: ghcr.io/home-assistant/home-assistant
+ha_image_tag: latest

@@ -1,0 +1,45 @@
+---
+# Node-RED Helm values — schwarzit/node-red chart.
+# Admin authentication enabled; MQTT client cert mounted for Mosquitto mTLS.
+
+image:
+  repository: {{ nodered_image }}
+  tag: "{{ nodered_image_tag }}"
+
+persistence:
+  enabled: true
+  storageClass: longhorn
+  size: {{ nodered_pvc_size }}
+  accessMode: ReadWriteOnce
+
+ingress:
+  enabled: true
+  ingressClassName: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+  hosts:
+    - host: {{ nodered_hostname }}
+      paths:
+        - path: /
+          pathType: Prefix
+
+env:
+  - name: NODE_RED_CREDENTIAL_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: node-red-admin
+        key: credential-secret
+  - name: TZ
+    value: America/New_York
+
+# Mount the MQTT client certificate for connecting to Mosquitto over MQTTS.
+extraVolumes:
+  - name: mqtt-client-cert
+    secret:
+      secretName: node-red-mqtt-client
+
+extraVolumeMounts:
+  - name: mqtt-client-cert
+    mountPath: /certs/mqtt-client
+    readOnly: true

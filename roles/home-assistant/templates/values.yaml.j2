@@ -1,0 +1,49 @@
+---
+# Home Assistant Helm values — pajikos/home-assistant chart.
+# arm64 native image; Longhorn-backed PVC; Traefik HTTPS ingress.
+
+image:
+  repository: {{ ha_image }}
+  tag: "{{ ha_image_tag }}"
+  pullPolicy: Always
+
+persistence:
+  enabled: true
+  storageClass: longhorn
+  size: {{ ha_pvc_size }}
+  accessMode: ReadWriteOnce
+
+# Mount extra config fragments and the MQTT client certificate.
+additionalVolumes:
+  - name: config-extra
+    configMap:
+      name: home-assistant-config-extra
+  - name: mqtt-client-cert
+    secret:
+      secretName: home-assistant-mqtt-client
+
+additionalMounts:
+  - name: config-extra
+    mountPath: /config/packages
+    readOnly: true
+  - name: mqtt-client-cert
+    mountPath: /certs/mqtt-client
+    readOnly: true
+
+ingress:
+  enabled: true
+  ingressClassName: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+  hosts:
+    - host: {{ ha_hostname }}
+      paths:
+        - path: /
+          pathType: Prefix
+
+# Home Assistant must know it is behind a reverse proxy to trust X-Forwarded-For.
+# The http: block is provided via the config-extra ConfigMap (packages/http.yaml).
+env:
+  - name: TZ
+    value: America/New_York

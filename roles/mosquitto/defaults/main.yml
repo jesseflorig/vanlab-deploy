@@ -1,0 +1,12 @@
+---
+# Mosquitto MQTT broker role defaults.
+# All values may be overridden in group_vars/all.yml.
+
+mosquitto_namespace: home-automation
+mosquitto_chart_version: "1.0.7"
+mosquitto_pvc_size: "1Gi"
+mosquitto_hostname: mqtt.fleet1.cloud
+
+# Stakater Reloader — watches the mosquitto-tls Secret and triggers a pod restart
+# on cert rotation so Mosquitto always serves a fresh certificate.
+reloader_chart_version: "1.3.0"

@@ -1,0 +1,31 @@
+---
+# InfluxDB 2.x Helm values — influxdata/influxdb2 chart.
+# Credentials sourced from pre-existing K8s Secret (influxdb-auth) to ensure
+# stable tokens across re-deployments.
+
+image:
+  tag: "2.7.4-alpine"
+
+adminUser:
+  organization: "{{ influxdb_org }}"
+  bucket: "{{ influxdb_bucket }}"
+  # existingSecret keys: admin-password, admin-token
+  existingSecret: "{{ influxdb_secret_name }}"
+
+persistence:
+  enabled: true
+  storageClass: longhorn
+  size: {{ influxdb_pvc_size }}
+  accessMode: ReadWriteOnce
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+  hostname: {{ influxdb_hostname }}
+
+service:
+  type: ClusterIP
+  port: 8086
