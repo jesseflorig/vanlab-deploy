@@ -100,6 +100,25 @@
   changed_when: false
   run_once: true
 
+# ── Packages include (written to PVC after Helm install) ─────────────────────
+
+- name: Ensure configuration.yaml loads packages directory
+  ansible.builtin.command: >
+    kubectl exec -n {{ ha_namespace }} statefulset/home-assistant -- python3 -c "
+path = '/config/configuration.yaml'
+content = open(path, 'rb').read()
+if b'packages' not in content:
+    open(path, 'ab').write(b'\nhomeassistant:\n  packages: !include_dir_named packages\n')
+    print('added')
+else:
+    print('present')
+"
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: ha_packages
+  changed_when: "'added' in ha_packages.stdout"
+  run_once: true
+
 # ── InfluxDB secrets.yaml (written to PVC after Helm install) ─────────────────
 
 - name: Write InfluxDB credentials to Home Assistant secrets.yaml
