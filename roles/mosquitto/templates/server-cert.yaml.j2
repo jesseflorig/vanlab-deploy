@@ -1,0 +1,16 @@
+---
+# Let's Encrypt TLS certificate for the Mosquitto MQTT broker.
+# cert-manager issues this via DNS-01 using the existing letsencrypt-prod ClusterIssuer.
+# Stakater Reloader watches this Secret and triggers a Deployment restart on renewal.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mosquitto-tls
+  namespace: {{ mosquitto_namespace }}
+spec:
+  secretName: mosquitto-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - {{ mosquitto_hostname }}

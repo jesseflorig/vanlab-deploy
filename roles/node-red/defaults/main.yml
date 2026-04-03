@@ -1,0 +1,10 @@
+---
+# Node-RED role defaults.
+# All values may be overridden in group_vars/all.yml.
+
+nodered_namespace: home-automation
+nodered_chart_version: "0.40.1"
+nodered_pvc_size: "5Gi"
+nodered_hostname: node-red.fleet1.cloud
+nodered_image: nodered/node-red
+nodered_image_tag: "4.1.2"

@@ -1,0 +1,75 @@
+---
+# Mosquitto Helm values — helmforgedev/mosquitto chart.
+# MQTTS-only: port 8883 with Let's Encrypt TLS and mTLS client cert enforcement.
+
+image:
+  tag: "2.0.22"
+
+# Expose MQTTS directly on the cluster node IPs (10.1.20.x:8883).
+# Traffic stays on the LAN — not routed through Traefik or the Cloudflare tunnel.
+service:
+  type: LoadBalancer
+  port: 8883
+
+persistence:
+  enabled: true
+  storageClass: longhorn
+  size: {{ mosquitto_pvc_size }}
+
+# Reloader annotation — triggers a rolling restart when the TLS Secret is updated
+# by cert-manager on certificate renewal.
+podAnnotations:
+  reloader.stakater.com/auto: "true"
+
+mosquitto:
+  config: |
+    # Disable plaintext listener — MQTTS only
+    # listener 1883 is intentionally omitted
+
+    listener 8883
+    protocol mqtt
+
+    # Server TLS certificate (Let's Encrypt, mounted from mosquitto-tls Secret)
+    cafile  /certs/server/ca.crt
+    certfile /certs/server/tls.crt
+    keyfile  /certs/server/tls.key
+
+    # Client certificate enforcement (mTLS)
+    # Client CA mounted from mosquitto-client-ca Secret
+    cafile  /certs/client-ca/ca.crt
+    require_certificate true
+    use_identity_as_username true
+
+    # Password file (belt-and-suspenders: cert CN used as username, password file validates it)
+    password_file /mosquitto/passwd/passwordfile
+
+    persistence true
+    persistence_location /mosquitto/data/
+
+    log_dest stdout
+    log_type all
+
+extraVolumes:
+  - name: server-tls
+    secret:
+      secretName: mosquitto-tls
+  - name: client-ca
+    secret:
+      secretName: mosquitto-client-ca
+      items:
+        - key: ca.crt
+          path: ca.crt
+  - name: passwd
+    secret:
+      secretName: mosquitto-passwords
+
+extraVolumeMounts:
+  - name: server-tls
+    mountPath: /certs/server
+    readOnly: true
+  - name: client-ca
+    mountPath: /certs/client-ca
+    readOnly: true
+  - name: passwd
+    mountPath: /mosquitto/passwd
+    readOnly: true

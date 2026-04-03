@@ -1,0 +1,226 @@
+---
+# Deploy Eclipse Mosquitto MQTT broker to the home-automation namespace.
+# Serves MQTTS exclusively on port 8883 with Let's Encrypt TLS and mTLS client
+# certificate enforcement. Stakater Reloader triggers pod restarts on cert rotation.
+
+# ── Namespace ────────────────────────────────────────────────────────────────
+
+- name: Create home-automation namespace
+  ansible.builtin.shell: >
+    kubectl create namespace {{ mosquitto_namespace }}
+    --dry-run=client -o yaml | kubectl apply -f -
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+# ── Internal CA (home-automation-ca ClusterIssuer) ───────────────────────────
+
+- name: Render CA issuer manifest
+  ansible.builtin.template:
+    src: ca-issuer.yaml.j2
+    dest: /tmp/home-automation-ca-issuer.yaml
+    mode: "0644"
+  run_once: true
+
+- name: Apply CA issuer resources
+  ansible.builtin.command: kubectl apply -f /tmp/home-automation-ca-issuer.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+- name: Wait for home-automation-ca ClusterIssuer to become Ready
+  ansible.builtin.command: >
+    kubectl wait clusterissuer/home-automation-ca
+    --for=condition=Ready
+    --timeout=120s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+# ── Mosquitto TLS server certificate (Let's Encrypt) ─────────────────────────
+
+- name: Render Mosquitto server certificate manifest
+  ansible.builtin.template:
+    src: server-cert.yaml.j2
+    dest: /tmp/mosquitto-server-cert.yaml
+    mode: "0644"
+  run_once: true
+
+- name: Apply Mosquitto server certificate
+  ansible.builtin.command: kubectl apply -f /tmp/mosquitto-server-cert.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+- name: Wait for Mosquitto TLS certificate to become Ready
+  ansible.builtin.command: >
+    kubectl wait certificate/mosquitto-tls
+    -n {{ mosquitto_namespace }}
+    --for=condition=Ready
+    --timeout=300s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+# ── Client CA Secret (copy CA cert to home-automation namespace) ──────────────
+
+- name: Read home-automation CA certificate
+  ansible.builtin.command: >
+    kubectl get secret home-automation-ca-secret
+    -n cert-manager
+    -o jsonpath='{.data.ca\.crt}'
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: ca_crt_b64
+  changed_when: false
+  run_once: true
+
+- name: Create mosquitto-client-ca Secret in home-automation namespace
+  ansible.builtin.shell: |
+    kubectl create secret generic mosquitto-client-ca \
+      --namespace {{ mosquitto_namespace }} \
+      --from-literal=ca.crt="$(echo '{{ ca_crt_b64.stdout }}' | base64 -d)" \
+      --dry-run=client -o yaml | kubectl apply -f -
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+# ── Mosquitto password file Secret ───────────────────────────────────────────
+
+- name: Create Mosquitto password file Secret
+  ansible.builtin.shell: |
+    kubectl create secret generic mosquitto-passwords \
+      --namespace {{ mosquitto_namespace }} \
+      --from-literal=passwordfile='{{ mosquitto_password_entry }}' \
+      --dry-run=client -o yaml | kubectl apply -f -
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+  no_log: true
+
+# ── Helm: Stakater Reloader ───────────────────────────────────────────────────
+
+- name: Add Stakater Helm repo
+  ansible.builtin.command: helm repo add stakater https://stakater.github.io/stakater-charts
+  register: stakater_repo
+  changed_when: "'has been added' in stakater_repo.stdout"
+  failed_when:
+    - stakater_repo.rc != 0
+    - "'already exists' not in stakater_repo.stderr | lower"
+  run_once: true
+
+- name: Update Helm repos
+  ansible.builtin.command: helm repo update
+  changed_when: false
+  run_once: true
+
+- name: Install Stakater Reloader via Helm
+  ansible.builtin.command: >
+    helm upgrade --install reloader stakater/reloader
+    --namespace {{ mosquitto_namespace }}
+    --version {{ reloader_chart_version }}
+    --set reloader.watchGlobally=false
+    --wait
+    --timeout 3m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: reloader_install
+  changed_when: "'has been deployed' in reloader_install.stdout or 'has been upgraded' in reloader_install.stdout"
+  run_once: true
+
+# ── Helm: Mosquitto ───────────────────────────────────────────────────────────
+
+- name: Add helmforgedev Helm repo
+  ansible.builtin.command: helm repo add helmforgedev https://helmforgedev.github.io/charts
+  register: helmforge_repo
+  changed_when: "'has been added' in helmforge_repo.stdout"
+  failed_when:
+    - helmforge_repo.rc != 0
+    - "'already exists' not in helmforge_repo.stderr | lower"
+  run_once: true
+
+- name: Update Helm repos
+  ansible.builtin.command: helm repo update
+  changed_when: false
+  run_once: true
+
+- name: Render Mosquitto Helm values
+  ansible.builtin.template:
+    src: values.yaml.j2
+    dest: /tmp/mosquitto-values.yaml
+    mode: "0644"
+  run_once: true
+
+- name: Install Mosquitto via Helm
+  ansible.builtin.command: >
+    helm upgrade --install mosquitto helmforgedev/mosquitto
+    --namespace {{ mosquitto_namespace }}
+    --version {{ mosquitto_chart_version }}
+    --values /tmp/mosquitto-values.yaml
+    --wait
+    --timeout 5m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: mosquitto_install
+  changed_when: "'has been deployed' in mosquitto_install.stdout or 'has been upgraded' in mosquitto_install.stdout"
+  run_once: true
+
+- name: Wait for Mosquitto StatefulSet rollout
+  ansible.builtin.command: >
+    kubectl rollout status statefulset/mosquitto
+    -n {{ mosquitto_namespace }}
+    --timeout=5m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+- name: Verify Mosquitto PVC is Bound
+  ansible.builtin.command: >
+    kubectl get pvc
+    -n {{ mosquitto_namespace }}
+    -o jsonpath='{.items[0].status.phase}'
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: mosquitto_pvc
+  changed_when: false
+  failed_when: mosquitto_pvc.stdout != "Bound"
+  run_once: true
+
+# ── Delete IngressRouteTCP if it exists from a previous deployment ────────────
+
+- name: Remove Mosquitto IngressRouteTCP (traffic is LAN-only via LoadBalancer)
+  ansible.builtin.command: >
+    kubectl delete ingressroutetcp mosquitto-mqtts
+    -n {{ mosquitto_namespace }}
+    --ignore-not-found
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+- name: Get Mosquitto LoadBalancer IP
+  ansible.builtin.command: >
+    kubectl get svc mosquitto
+    -n {{ mosquitto_namespace }}
+    -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: mosquitto_lb_ip
+  changed_when: false
+  run_once: true
+
+- name: Display Mosquitto deployment summary
+  ansible.builtin.debug:
+    msg: >
+      Mosquitto is running (LAN-only).
+      MQTTS on LAN: mqtts://{{ mosquitto_lb_ip.stdout | default('<pending>') }}:8883
+      In-cluster: mosquitto.{{ mosquitto_namespace }}.svc.cluster.local:8883
+  run_once: true

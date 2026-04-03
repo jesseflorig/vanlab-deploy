@@ -1,0 +1,121 @@
+---
+# Deploy Home Assistant Core to the home-automation namespace.
+# Accessible at https://{{ ha_hostname }} via Traefik.
+# Connects to Mosquitto via MQTTS using a client certificate from home-automation-ca.
+
+# ── Helm repo ─────────────────────────────────────────────────────────────────
+
+- name: Add pajikos Home Assistant Helm repo
+  ansible.builtin.command: helm repo add pajikos http://pajikos.github.io/home-assistant-helm-chart/
+  register: pajikos_repo
+  changed_when: "'has been added' in pajikos_repo.stdout"
+  failed_when:
+    - pajikos_repo.rc != 0
+    - "'already exists' not in pajikos_repo.stderr | lower"
+  run_once: true
+
+- name: Update Helm repos
+  ansible.builtin.command: helm repo update
+  changed_when: false
+  run_once: true
+
+# ── MQTT client certificate ───────────────────────────────────────────────────
+
+- name: Render Home Assistant MQTT client certificate manifest
+  ansible.builtin.template:
+    src: ../../mosquitto/templates/client-cert.yaml.j2
+    dest: /tmp/ha-mqtt-client-cert.yaml
+    mode: "0644"
+  vars:
+    cert_name: home-assistant-mqtt-client
+    cert_namespace: "{{ ha_namespace }}"
+    cert_cn: home-assistant
+    cert_secret_name: home-assistant-mqtt-client
+  run_once: true
+
+- name: Apply Home Assistant MQTT client certificate
+  ansible.builtin.command: kubectl apply -f /tmp/ha-mqtt-client-cert.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+- name: Wait for Home Assistant MQTT client certificate to become Ready
+  ansible.builtin.command: >
+    kubectl wait certificate/home-assistant-mqtt-client
+    -n {{ ha_namespace }}
+    --for=condition=Ready
+    --timeout=120s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+# ── Config ConfigMap ──────────────────────────────────────────────────────────
+
+- name: Render Home Assistant config-extra ConfigMap
+  ansible.builtin.template:
+    src: config-extra.yaml.j2
+    dest: /tmp/ha-config-extra.yaml
+    mode: "0644"
+  run_once: true
+
+- name: Apply Home Assistant config-extra ConfigMap
+  ansible.builtin.command: kubectl apply -f /tmp/ha-config-extra.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+# ── Helm: Home Assistant ──────────────────────────────────────────────────────
+
+- name: Render Home Assistant Helm values
+  ansible.builtin.template:
+    src: values.yaml.j2
+    dest: /tmp/ha-values.yaml
+    mode: "0644"
+  run_once: true
+
+- name: Install Home Assistant via Helm
+  ansible.builtin.command: >
+    helm upgrade --install home-assistant pajikos/home-assistant
+    --namespace {{ ha_namespace }}
+    --version {{ ha_chart_version }}
+    --values /tmp/ha-values.yaml
+    --wait
+    --timeout 10m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: ha_install
+  changed_when: "'has been deployed' in ha_install.stdout or 'has been upgraded' in ha_install.stdout"
+  run_once: true
+
+- name: Wait for Home Assistant StatefulSet rollout
+  ansible.builtin.command: >
+    kubectl rollout status statefulset/home-assistant
+    -n {{ ha_namespace }}
+    --timeout=10m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+# ── InfluxDB secrets.yaml (written to PVC after Helm install) ─────────────────
+
+- name: Write InfluxDB credentials to Home Assistant secrets.yaml
+  ansible.builtin.command: >
+    kubectl exec -n {{ ha_namespace }} statefulset/home-assistant -- sh -c
+    "grep -q influxdb_token /config/secrets.yaml 2>/dev/null ||
+    printf 'influxdb_token: {{ influxdb_admin_token }}\ninfluxdb_org_id: {{ influxdb_org_id }}\n'
+    >> /config/secrets.yaml"
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: ha_secrets
+  changed_when: ha_secrets.rc == 0
+  run_once: true
+  when: influxdb_admin_token is defined and influxdb_org_id is defined and influxdb_org_id != '<INFLUXDB_ORG_ID_HEX>'
+
+- name: Display Home Assistant deployment summary
+  ansible.builtin.debug:
+    msg: "Home Assistant is running — UI: https://{{ ha_hostname }}"
+  run_once: true

@@ -1,0 +1,36 @@
+---
+# Bootstrap SelfSigned issuer — used only to sign the home-automation CA certificate.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-issuer
+spec:
+  selfSigned: {}
+---
+# Internal CA certificate for the home-automation namespace.
+# Issues client certificates for MQTT clients (Home Assistant, Node-RED, IoT devices).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: home-automation-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: home-automation-ca
+  secretName: home-automation-ca-secret
+  privateKey:
+    algorithm: RSA
+    size: 4096
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+---
+# CA-backed ClusterIssuer — used by client cert Certificate resources
+# in the home-automation namespace.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: home-automation-ca
+spec:
+  ca:
+    secretName: home-automation-ca-secret

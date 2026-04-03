@@ -1,0 +1,59 @@
+---
+# Generate a mosquitto_passwd hash entry from a plaintext password.
+# Outputs the username:hash line ready to paste into group_vars/all.yml
+# as the value of mosquitto_password_entry.
+#
+# Usage:
+#   ansible-playbook -i hosts.ini playbooks/utilities/gen-mosquitto-passwd.yml \
+#     -e mqtt_username=homeassistant \
+#     -e mqtt_password=yourplaintextpassword
+#
+# Both variables are required. The playbook will fail fast with a clear message
+# if either is missing.
+
+- name: Generate Mosquitto password hash
+  hosts: servers[0]
+  become: true
+  gather_facts: false
+
+  vars:
+    mqtt_username: ""
+    mqtt_password: ""
+    passwd_tmpfile: /tmp/mosquitto-passwd-gen
+
+  tasks:
+    - name: Assert required variables are provided
+      ansible.builtin.assert:
+        that:
+          - mqtt_username | length > 0
+          - mqtt_password | length > 0
+        fail_msg: >
+          Both mqtt_username and mqtt_password must be supplied via -e.
+          Example: -e mqtt_username=homeassistant -e mqtt_password=secret
+
+    - name: Install mosquitto (provides mosquitto_passwd)
+      ansible.builtin.apt:
+        name: mosquitto
+        state: present
+        update_cache: false
+
+    - name: Generate password hash into temp file
+      ansible.builtin.command: >
+        mosquitto_passwd -c -b {{ passwd_tmpfile }} {{ mqtt_username }} {{ mqtt_password }}
+      changed_when: false
+      no_log: true
+
+    - name: Read generated hash entry
+      ansible.builtin.slurp:
+        src: "{{ passwd_tmpfile }}"
+      register: passwd_file_content
+      no_log: true
+
+    - name: Remove temp file
+      ansible.builtin.file:
+        path: "{{ passwd_tmpfile }}"
+        state: absent
+
+    - name: Display password hash entry
+      ansible.builtin.debug:
+        msg: "mosquitto_password_entry: \"{{ passwd_file_content.content | b64decode | trim }}\""

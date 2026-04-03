@@ -1,0 +1,89 @@
+---
+# Deploy InfluxDB 2.x to the home-automation namespace.
+# Accessible at https://{{ influxdb_hostname }} via Traefik.
+# Home Assistant writes entity states to the '{{ influxdb_bucket }}' bucket.
+
+# ── Pre-create credentials Secret ────────────────────────────────────────────
+
+- name: Create InfluxDB credentials Secret
+  ansible.builtin.shell: |
+    kubectl create secret generic {{ influxdb_secret_name }} \
+      --namespace {{ influxdb_namespace }} \
+      --from-literal=admin-password='{{ influxdb_admin_password }}' \
+      --from-literal=admin-token='{{ influxdb_admin_token }}' \
+      --dry-run=client -o yaml | kubectl apply -f -
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+  no_log: true
+
+# ── Helm repo ─────────────────────────────────────────────────────────────────
+
+- name: Add InfluxData Helm repo
+  ansible.builtin.command: helm repo add influxdata https://helm.influxdata.com/
+  register: influxdata_repo
+  changed_when: "'has been added' in influxdata_repo.stdout"
+  failed_when:
+    - influxdata_repo.rc != 0
+    - "'already exists' not in influxdata_repo.stderr | lower"
+  run_once: true
+
+- name: Update Helm repos
+  ansible.builtin.command: helm repo update
+  changed_when: false
+  run_once: true
+
+# ── Helm: InfluxDB ────────────────────────────────────────────────────────────
+
+- name: Render InfluxDB Helm values
+  ansible.builtin.template:
+    src: values.yaml.j2
+    dest: /tmp/influxdb-values.yaml
+    mode: "0644"
+  run_once: true
+
+- name: Install InfluxDB via Helm
+  ansible.builtin.command: >
+    helm upgrade --install influxdb influxdata/influxdb2
+    --namespace {{ influxdb_namespace }}
+    --version {{ influxdb_chart_version }}
+    --values /tmp/influxdb-values.yaml
+    --wait
+    --timeout 5m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: influxdb_install
+  changed_when: "'has been deployed' in influxdb_install.stdout or 'has been upgraded' in influxdb_install.stdout"
+  run_once: true
+
+- name: Wait for InfluxDB StatefulSet rollout
+  ansible.builtin.command: >
+    kubectl rollout status statefulset/influxdb-influxdb2
+    -n {{ influxdb_namespace }}
+    --timeout=5m
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+- name: Verify InfluxDB PVC is Bound
+  ansible.builtin.command: >
+    kubectl get pvc -n {{ influxdb_namespace }}
+    -l app.kubernetes.io/name=influxdb2
+    -o jsonpath='{.items[0].status.phase}'
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: influxdb_pvc
+  changed_when: false
+  failed_when: influxdb_pvc.stdout != "Bound"
+  run_once: true
+
+- name: Display InfluxDB deployment summary
+  ansible.builtin.debug:
+    msg: >
+      InfluxDB is running — UI: https://{{ influxdb_hostname }}
+      In-cluster: http://influxdb.{{ influxdb_namespace }}.svc.cluster.local:8086
+      NOTE: After first login, copy the org ID from the URL and set influxdb_org_id in group_vars/all.yml,
+      then re-run: ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags hass
+  run_once: true

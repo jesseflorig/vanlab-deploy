@@ -1,0 +1,26 @@
+---
+# ConfigMap injected into Home Assistant's /config/packages/ directory.
+# HA loads all YAML files under packages/ as configuration fragments.
+# This avoids modifying the main configuration.yaml on the PVC.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: home-assistant-config-extra
+  namespace: {{ ha_namespace }}
+data:
+  http.yaml: |
+    # Trust the K3s pod CIDR so HA correctly reads client IPs from Traefik.
+    http:
+      use_x_forwarded_for: true
+      trusted_proxies:
+        - 10.42.0.0/16
+
+  influxdb2.yaml: |
+    # Long-term metrics storage in InfluxDB 2.x.
+    # influxdb_token and influxdb_org_id are read from secrets.yaml on the PVC.
+    influxdb2:
+      host: influxdb.{{ ha_namespace }}.svc.cluster.local
+      port: 8086
+      token: !secret influxdb_token
+      organization: !secret influxdb_org_id
+      bucket: homeassistant

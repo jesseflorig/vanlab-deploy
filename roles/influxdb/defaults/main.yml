@@ -1,0 +1,11 @@
+---
+# InfluxDB 2.x role defaults.
+# All values may be overridden in group_vars/all.yml.
+
+influxdb_namespace: home-automation
+influxdb_chart_version: "2.1.2"
+influxdb_pvc_size: "20Gi"
+influxdb_hostname: influxdb.fleet1.cloud
+influxdb_org: vanlab
+influxdb_bucket: homeassistant
+influxdb_secret_name: influxdb-auth

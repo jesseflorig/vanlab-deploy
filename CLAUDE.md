@@ -12,6 +12,7 @@ Auto-generated from all feature plans. Last updated: 2026-04-02
 - YAML (Ansible 2.x) — existing project conventions + `prometheus-community/kube-prometheus-stack` Helm chart; Longhorn (already deployed) (009-prometheus-longhorn-monitoring)
 - Longhorn `storageClassName: longhorn` — Prometheus 20Gi, Grafana 5Gi, Alertmanager 5Gi (009-prometheus-longhorn-monitoring)
 - Longhorn `storageClass: longhorn` — Loki 20Gi PVC (014-loki-log-shipping)
+- Longhorn `storageClass: longhorn` — Mosquitto: 1Gi, HA: 10Gi, Node-RED: 5Gi, InfluxDB: 20Gi (016-home-automation-stack)
 
 - YAML (Ansible 2.x) — follows existing project conventions + `smartmontools` (apt) — installed idempotently by the playbook as a (001-node-disk-health)
 
@@ -31,9 +32,9 @@ tests/
 YAML (Ansible 2.x) — follows existing project conventions: Follow standard conventions
 
 ## Recent Changes
+- 016-home-automation-stack: Added YAML (Ansible 2.x) — follows existing project conventions
 - 014-loki-log-shipping: Added YAML (Ansible 2.x) — follows existing project conventions
 - 009-prometheus-longhorn-monitoring: Added YAML (Ansible 2.x) — existing project conventions + `prometheus-community/kube-prometheus-stack` Helm chart; Longhorn (already deployed)
-- 008-etcd-cluster-backend: Added YAML (Ansible 2.x) — existing project conventions + K3s (already installed), embedded etcd (bundled with K3s — no separate install)
 
 
 <!-- MANUAL ADDITIONS START -->
