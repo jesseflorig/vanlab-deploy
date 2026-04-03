@@ -2,6 +2,9 @@
 # Home Assistant Helm values — pajikos/home-assistant 0.3.52
 # Managed by ArgoCD; generated from roles/home-assistant/templates/values.yaml.j2
 
+podAnnotations:
+  configmap.reloader.stakater.com/reload: "home-assistant-config-extra"
+
 image:
   repository: ghcr.io/home-assistant/home-assistant
   tag: "latest"
@@ -44,7 +47,7 @@ ingress:
 env:
   - name: TZ
     value: America/New_York
-  # InfluxDB credentials injected as env vars; referenced via !env_var in packages/influxdb2.yaml
+  # InfluxDB credentials injected as env vars; referenced via !env_var in packages/influxdb.yaml
   - name: INFLUXDB_TOKEN
     valueFrom:
       secretKeyRef:
