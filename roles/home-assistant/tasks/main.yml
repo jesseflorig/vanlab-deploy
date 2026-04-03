@@ -103,16 +103,21 @@
 # ── Packages include (written to PVC after Helm install) ─────────────────────
 
 - name: Ensure configuration.yaml loads packages directory
-  ansible.builtin.command: >
-    kubectl exec -n {{ ha_namespace }} statefulset/home-assistant -- python3 -c "
-path = '/config/configuration.yaml'
-content = open(path, 'rb').read()
-if b'packages' not in content:
-    open(path, 'ab').write(b'\nhomeassistant:\n  packages: !include_dir_named packages\n')
-    print('added')
-else:
-    print('present')
-"
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - exec
+      - -n
+      - "{{ ha_namespace }}"
+      - statefulset/home-assistant
+      - --
+      - sh
+      - -c
+      - >-
+        grep -q 'packages' /config/configuration.yaml
+        && echo present
+        || { printf '\nhomeassistant:\n  packages: !include_dir_named packages\n'
+        >> /config/configuration.yaml && echo added; }
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: ha_packages

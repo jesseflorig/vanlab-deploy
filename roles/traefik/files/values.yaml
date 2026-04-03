@@ -23,6 +23,8 @@ ports:
     exposedPort: 8883
     protocol: TCP
     nodePort: 30883
+    expose:
+      default: true
 
 ingressRoute:
   dashboard:
