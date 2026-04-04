@@ -1,0 +1,231 @@
+---
+# nvme-migrate.yml
+# Migrates Longhorn storage from eMMC (/var/lib/longhorn) to NVMe (/mnt/nvme)
+# on every cluster node.
+#
+# Prerequisites:
+#   - All 6 nodes reachable via SSH
+#   - Longhorn healthy (kubectl get nodes.longhorn.io -n longhorn-system)
+#   - jq installed on the control node (brew install jq / apt install jq)
+#
+# Usage (full migration, runs all 5 plays in sequence):
+#   ansible-playbook -i hosts.ini playbooks/utilities/nvme-migrate.yml
+#
+# Usage (individual phases via tags):
+#   ansible-playbook -i hosts.ini playbooks/utilities/nvme-migrate.yml --tags nvme-prep
+#   ansible-playbook -i hosts.ini playbooks/utilities/nvme-migrate.yml --tags longhorn-register
+#   ansible-playbook -i hosts.ini playbooks/utilities/nvme-migrate.yml --tags longhorn-evict
+#   ansible-playbook -i hosts.ini playbooks/utilities/nvme-migrate.yml --tags longhorn-cleanup
+#   ansible-playbook -i hosts.ini playbooks/utilities/nvme-migrate.yml --tags emmc-cleanup
+#
+# Plays:
+#   1. nvme-prep         — partition, format, mount NVMe; disable PCIe ASPM (may reboot)
+#   2. longhorn-register — add /mnt/nvme to Longhorn; disable eMMC scheduling
+#   3. longhorn-evict    — request replica eviction from eMMC; poll until complete
+#   4. longhorn-cleanup  — safety-gate check; remove eMMC disk from Longhorn CRDs
+#   5. emmc-cleanup      — delete replica data from eMMC after confirmed migration
+
+# ── Play 1: NVMe Prep ─────────────────────────────────────────────────────────
+
+- name: Prepare NVMe drives on all cluster nodes
+  hosts: cluster
+  become: true
+  gather_facts: false
+  tags: nvme-prep
+  pre_tasks:
+    - name: Assert nvme0n1 block device is present
+      ansible.builtin.command: lsblk /dev/nvme0n1
+      changed_when: false
+      failed_when: false
+      register: nvme_present
+
+    - name: Fail if nvme0n1 not found
+      ansible.builtin.fail:
+        msg: >
+          /dev/nvme0n1 not found on {{ inventory_hostname }}.
+          Check M.2 HAT seating and PCIe link. Run: lsblk
+      when: nvme_present.rc != 0
+
+  roles:
+    - nvme-prep
+
+# ── Play 2: Longhorn Disk Registration ────────────────────────────────────────
+
+- name: Register NVMe disk in Longhorn and disable eMMC scheduling
+  hosts: servers[0]
+  become: true
+  gather_facts: false
+  tags: longhorn-register
+  vars:
+    longhorn_ns: longhorn-system
+    nvme_reserved: "{{ nvme_longhorn_reserved_bytes | default(53687091200) }}"
+  tasks:
+    - name: Add nvme-disk to Longhorn node CRD for each cluster node
+      ansible.builtin.shell: |
+        kubectl patch nodes.longhorn.io {{ item }} \
+          -n {{ longhorn_ns }} --type merge \
+          -p '{
+            "spec": {
+              "disks": {
+                "nvme-disk": {
+                  "path": "/mnt/nvme",
+                  "allowScheduling": true,
+                  "evictionRequested": false,
+                  "storageReserved": {{ nvme_reserved }},
+                  "diskType": "filesystem",
+                  "tags": []
+                }
+              }
+            }
+          }'
+      loop: "{{ groups['cluster'] }}"
+      changed_when: true
+
+    - name: Wait for nvme-disk to become Schedulable on each node
+      ansible.builtin.shell: |
+        kubectl get nodes.longhorn.io {{ item }} \
+          -n {{ longhorn_ns }} -o json \
+          | jq -r '.status.diskStatus["nvme-disk"].conditions[]
+                   | select(.type=="Schedulable") | .status' 2>/dev/null
+      loop: "{{ groups['cluster'] }}"
+      register: nvme_schedulable
+      until: nvme_schedulable.stdout == "True"
+      retries: 20
+      delay: 15
+      changed_when: false
+
+    - name: Discover eMMC disk key on each node
+      ansible.builtin.shell: |
+        kubectl get nodes.longhorn.io {{ item }} \
+          -n {{ longhorn_ns }} -o json \
+          | jq -r '.spec.disks | keys[] | select(startswith("default-disk"))'
+      loop: "{{ groups['cluster'] }}"
+      register: emmc_keys
+      changed_when: false
+
+    - name: Disable scheduling on eMMC disk for each node
+      ansible.builtin.shell: |
+        kubectl patch nodes.longhorn.io {{ item.item }} \
+          -n {{ longhorn_ns }} --type merge \
+          -p '{"spec":{"disks":{"{{ item.stdout }}":{"allowScheduling":false}}}}'
+      loop: "{{ emmc_keys.results }}"
+      when: item.stdout != ""
+      changed_when: true
+
+# ── Play 3: Longhorn Replica Eviction ─────────────────────────────────────────
+
+- name: Evict Longhorn replicas from eMMC to NVMe on each node (sequential)
+  hosts: servers[0]
+  become: true
+  gather_facts: false
+  tags: longhorn-evict
+  vars:
+    longhorn_ns: longhorn-system
+  tasks:
+    - name: Discover eMMC disk key on each node (pre-eviction)
+      ansible.builtin.shell: |
+        kubectl get nodes.longhorn.io {{ item }} \
+          -n {{ longhorn_ns }} -o json \
+          | jq -r '.spec.disks | keys[] | select(startswith("default-disk"))'
+      loop: "{{ groups['cluster'] }}"
+      register: emmc_keys_evict
+      changed_when: false
+
+    - name: Request eviction from eMMC disk on each node
+      ansible.builtin.shell: |
+        kubectl patch nodes.longhorn.io {{ item.item }} \
+          -n {{ longhorn_ns }} --type merge \
+          -p '{"spec":{"disks":{"{{ item.stdout }}":{"allowScheduling":false,"evictionRequested":true}}}}'
+      loop: "{{ emmc_keys_evict.results }}"
+      when: item.stdout != ""
+      changed_when: true
+
+    - name: Wait for all replicas to evacuate eMMC on each node (up to 30 min each)
+      ansible.builtin.shell: |
+        kubectl get nodes.longhorn.io {{ item.item }} \
+          -n {{ longhorn_ns }} -o json \
+          | jq '.status.diskStatus["{{ item.stdout }}"].scheduledReplica | length'
+      loop: "{{ emmc_keys_evict.results }}"
+      when: item.stdout != ""
+      register: emmc_replica_count
+      until: emmc_replica_count.stdout == "0"
+      retries: 60
+      delay: 30
+      changed_when: false
+
+# ── Play 4: Longhorn eMMC Disk Removal ────────────────────────────────────────
+
+- name: Remove eMMC disk from Longhorn CRDs after confirmed eviction
+  hosts: servers[0]
+  become: true
+  gather_facts: false
+  tags: longhorn-cleanup
+  vars:
+    longhorn_ns: longhorn-system
+  tasks:
+    - name: Discover eMMC disk key on each node (pre-removal)
+      ansible.builtin.shell: |
+        kubectl get nodes.longhorn.io {{ item }} \
+          -n {{ longhorn_ns }} -o json \
+          | jq -r '.spec.disks | keys[] | select(startswith("default-disk"))'
+      loop: "{{ groups['cluster'] }}"
+      register: emmc_keys_remove
+      changed_when: false
+
+    - name: Safety gate — assert eMMC has zero scheduled replicas before removal
+      ansible.builtin.shell: |
+        kubectl get nodes.longhorn.io {{ item.item }} \
+          -n {{ longhorn_ns }} -o json \
+          | jq '.status.diskStatus["{{ item.stdout }}"].scheduledReplica | length'
+      loop: "{{ emmc_keys_remove.results }}"
+      when: item.stdout != ""
+      register: emmc_replica_gate
+      changed_when: false
+      failed_when: emmc_replica_gate.stdout | int != 0
+
+    - name: Remove eMMC disk from Longhorn node CRD for each node
+      ansible.builtin.shell: |
+        kubectl patch nodes.longhorn.io {{ item.item }} \
+          -n {{ longhorn_ns }} --type json \
+          -p '[{"op":"remove","path":"/spec/disks/{{ item.stdout }}"}]'
+      loop: "{{ emmc_keys_remove.results }}"
+      when: item.stdout != ""
+      register: emmc_disk_remove
+      until: emmc_disk_remove is not failed
+      retries: 3
+      delay: 15
+      changed_when: true
+
+    - name: Verify only nvme-disk remains in Longhorn spec for each node
+      ansible.builtin.shell: |
+        kubectl get nodes.longhorn.io {{ item }} \
+          -n {{ longhorn_ns }} -o json \
+          | jq '.spec.disks | keys | length'
+      loop: "{{ groups['cluster'] }}"
+      register: disk_count
+      changed_when: false
+      failed_when: disk_count.stdout | int != 1
+
+# ── Play 5: eMMC Replica Data Cleanup ─────────────────────────────────────────
+
+- name: Remove orphaned Longhorn replica data from eMMC on all nodes
+  hosts: cluster
+  become: true
+  gather_facts: false
+  tags: emmc-cleanup
+  tasks:
+    - name: Safety gate — assert /mnt/nvme/longhorn-disk.cfg exists (NVMe active)
+      ansible.builtin.stat:
+        path: /mnt/nvme/longhorn-disk.cfg
+      register: nvme_disk_cfg
+      failed_when: not nvme_disk_cfg.stat.exists
+
+    - name: Remove eMMC replica data directory
+      ansible.builtin.file:
+        path: /var/lib/longhorn/replicas
+        state: absent
+
+    - name: Remove eMMC longhorn-disk.cfg marker
+      ansible.builtin.file:
+        path: /var/lib/longhorn/longhorn-disk.cfg
+        state: absent
