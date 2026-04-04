@@ -1,0 +1,8 @@
+---
+# Handlers for the nvme-prep role.
+
+- name: Reboot node
+  ansible.builtin.reboot:
+    reboot_timeout: 300
+    post_reboot_delay: 30
+    msg: "Rebooting to apply PCIe ASPM disable in cmdline.txt"

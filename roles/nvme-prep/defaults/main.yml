@@ -1,0 +1,18 @@
+---
+# Default variables for the nvme-prep role.
+# Override in group_vars or host_vars if your hardware differs.
+
+# Block device and partition
+nvme_device: /dev/nvme0n1
+nvme_partition: /dev/nvme0n1p1
+
+# Mount configuration
+nvme_mount_path: /mnt/nvme
+nvme_label: longhorn-nvme
+# nofail: prevents emergency-mode boot if NVMe fails to enumerate (critical for
+# server/etcd nodes). x-systemd.device-timeout=30s avoids indefinite systemd wait.
+nvme_mount_opts: "defaults,noatime,nodiratime,nofail,x-systemd.device-timeout=30s"
+
+# Bytes to reserve from Longhorn scheduling on this disk (~50 GiB).
+# Keeps headroom above the 25% storageMinimalAvailablePercentage gate.
+nvme_longhorn_reserved_bytes: 53687091200

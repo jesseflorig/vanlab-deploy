@@ -1,0 +1,76 @@
+---
+# Idempotently partitions and formats nvme0n1 as ext4, mounts at /mnt/nvme,
+# and disables PCIe ASPM to prevent NVMe dropout on Raspberry Pi CM5.
+#
+# Safe to re-run: blkid probe skips partitioning/formatting if already done.
+# Triggers a reboot only on the first run (cmdline.txt change for ASPM disable).
+
+- name: Install NVMe prep packages
+  ansible.builtin.apt:
+    name:
+      - e2fsprogs
+      - parted
+    state: present
+    update_cache: false
+
+- name: Ensure {{ nvme_mount_path }} mount point exists
+  ansible.builtin.file:
+    path: "{{ nvme_mount_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Probe {{ nvme_partition }} for existing filesystem (idempotency check)
+  ansible.builtin.command: blkid -o value -s UUID {{ nvme_partition }}
+  register: nvme_part_uuid
+  changed_when: false
+  failed_when: false
+
+- name: Create GPT partition table on {{ nvme_device }}
+  community.general.parted:
+    device: "{{ nvme_device }}"
+    label: gpt
+    state: present
+  when: nvme_part_uuid.stdout == ""
+
+- name: Create partition 1 spanning full {{ nvme_device }}
+  community.general.parted:
+    device: "{{ nvme_device }}"
+    number: 1
+    state: present
+    part_start: "0%"
+    part_end: "100%"
+  when: nvme_part_uuid.stdout == ""
+
+- name: Format {{ nvme_partition }} as ext4 (skipped if filesystem already present)
+  community.general.filesystem:
+    fstype: ext4
+    dev: "{{ nvme_partition }}"
+    force: false
+    opts: "-L {{ nvme_label }}"
+  when: nvme_part_uuid.stdout == ""
+
+- name: Get UUID of {{ nvme_partition }} for fstab entry
+  ansible.builtin.command: blkid -o value -s UUID {{ nvme_partition }}
+  register: nvme_uuid_final
+  changed_when: false
+  failed_when: nvme_uuid_final.stdout == ""
+
+- name: Mount {{ nvme_mount_path }} and persist in /etc/fstab via UUID
+  ansible.posix.mount:
+    path: "{{ nvme_mount_path }}"
+    src: "UUID={{ nvme_uuid_final.stdout | trim }}"
+    fstype: ext4
+    opts: "{{ nvme_mount_opts }}"
+    state: mounted
+    dump: "0"
+    passno: "2"
+
+- name: Disable PCIe ASPM in /boot/firmware/cmdline.txt for NVMe stability on CM5
+  ansible.builtin.lineinfile:
+    path: /boot/firmware/cmdline.txt
+    backrefs: true
+    regexp: '^((?!.*pcie_aspm=off).*)$'
+    line: '\1 pcie_aspm=off'
+  notify: Reboot node
