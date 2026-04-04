@@ -27,16 +27,10 @@
   changed_when: false
   failed_when: false
 
-- name: Create GPT partition table on {{ nvme_device }}
+- name: Create GPT partition table and partition 1 spanning full {{ nvme_device }}
   community.general.parted:
     device: "{{ nvme_device }}"
     label: gpt
-    state: present
-  when: nvme_part_uuid.stdout == ""
-
-- name: Create partition 1 spanning full {{ nvme_device }}
-  community.general.parted:
-    device: "{{ nvme_device }}"
     number: 1
     state: present
     part_start: "0%"
