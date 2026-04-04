@@ -15,3 +15,11 @@ data:
       trusted_proxies:
         - 10.42.0.0/16
 
+  mqtt.yaml: |
+    mqtt:
+      broker: mosquitto.home-automation.svc.cluster.local
+      port: 8883
+      username: homeassistant
+      password: passwordpassword
+      certificate: /certs/mqtt-client/ca.crt
+
