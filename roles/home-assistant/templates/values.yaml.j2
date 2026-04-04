@@ -13,6 +13,22 @@ persistence:
   size: {{ ha_pvc_size }}
   accessMode: ReadWriteOnce
 
+# Init container: append home-automation-ca to the system CA bundle so HA
+# trusts the Mosquitto server cert when auto-enabling TLS on port 8883.
+initContainers:
+  - name: install-ca-cert
+    image: {{ ha_image }}:{{ ha_image_tag }}
+    command:
+      - sh
+      - -c
+      - cat /etc/ssl/certs/ca-certificates.crt /certs/mqtt-client/ca.crt > /shared-certs/ca-certificates.crt
+    volumeMounts:
+      - name: mqtt-client-cert
+        mountPath: /certs/mqtt-client
+        readOnly: true
+      - name: shared-certs
+        mountPath: /shared-certs
+
 # Mount extra config fragments and the MQTT client certificate.
 additionalVolumes:
   - name: config-extra
@@ -21,6 +37,8 @@ additionalVolumes:
   - name: mqtt-client-cert
     secret:
       secretName: home-assistant-mqtt-client
+  - name: shared-certs
+    emptyDir: {}
 
 additionalMounts:
   - name: config-extra
@@ -29,6 +47,8 @@ additionalMounts:
   - name: mqtt-client-cert
     mountPath: /certs/mqtt-client
     readOnly: true
+  - name: shared-certs
+    mountPath: /etc/ssl/certs
 
 ingress:
   enabled: true
@@ -47,3 +67,5 @@ ingress:
 env:
   - name: TZ
     value: America/New_York
+  - name: SSL_CERT_FILE
+    value: /etc/ssl/certs/ca-certificates.crt
