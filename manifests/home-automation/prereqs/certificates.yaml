@@ -20,6 +20,8 @@ spec:
     kind: ClusterIssuer
   dnsNames:
     - mqtt.fleet1.cloud
+    - mosquitto.home-automation.svc.cluster.local
+    - mosquitto.home-automation
   usages:
     - digital signature
     - key encipherment
