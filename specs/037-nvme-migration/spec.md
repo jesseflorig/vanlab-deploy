@@ -19,7 +19,6 @@ mounted at `/mnt/nvme` so that Longhorn can use it as a storage backend.
 - `nvme0n1` partitioned with a single ext4 partition on every cluster node (nodes 1–6)
 - Partition mounted at `/mnt/nvme` and persisted in `/etc/fstab` via UUID (not device name)
 - Ansible task is idempotent: re-running does not re-format an already-formatted drive
-- Node5 is unreachable via SSH — task must succeed on nodes 1–4, 6 and gracefully skip node5
 
 ### P2 — Longhorn Disk Registration
 As a cluster operator, I want Longhorn to recognise `/mnt/nvme` as an additional disk on each

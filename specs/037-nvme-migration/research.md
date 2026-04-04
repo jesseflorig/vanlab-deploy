@@ -219,7 +219,7 @@ Must use JSON patch `remove` op — merge patch cannot delete a key.
 - **Current disk**: `/var/lib/longhorn` on `mmcblk0p2` (58GB eMMC) per node
 - **NVMe**: `nvme0n1` (1.7TB), unmounted, present on nodes 1–6
 - **Active PVCs**: mosquitto-data (1Gi), home-assistant (10Gi), influxdb (20Gi), node-red (5Gi) = 36Gi total, all 2-replica
-- **Node5**: unreachable via SSH; Longhorn reports it as `Not Schedulable`
+- **Node5**: SSH restored; was cordoned (now uncordoned); same NVMe layout as other nodes
 - **Reclaim policy**: `Retain` — PVs are not auto-deleted when PVCs are removed
 
 **Disk key for the existing eMMC disk** must be read at runtime from `kubectl get nodes.longhorn.io <node> -n longhorn-system -o json | jq '.spec.disks | keys'` — it follows the pattern `default-disk-<fsid>` (e.g., `default-disk-ed7af10f5b8356be`) and varies per node.

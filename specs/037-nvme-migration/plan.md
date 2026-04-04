@@ -15,7 +15,7 @@ Format and mount the 1.7TB NVMe drive (`nvme0n1`) on each cluster node at `/mnt/
 **Target Platform**: Raspberry Pi CM5, arm64, Debian Bookworm (Raspberry Pi OS), K3s
 **Project Type**: Infrastructure playbook + Ansible role
 **Performance Goals**: N/A — migration preserves existing volume availability; no performance regression during migration
-**Constraints**: Node5 unreachable via SSH (graceful skip required); no volume downtime during migration (Longhorn 2-replica tolerance ensures continuity); eMMC must not be removed until all replicas have migrated
+**Constraints**: No volume downtime during migration (Longhorn 2-replica tolerance ensures continuity); eMMC must not be removed until all replicas have migrated
 
 ## Constitution Check
 
@@ -112,9 +112,8 @@ The handler only fires if `cmdline.txt` was changed (first run). Subsequent runs
 
 Four-play structure matching the four user stories. Designed to be run once per cluster, but individual plays can be re-run safely.
 
-**Play 1 — NVMe Prep** (`hosts: cluster`, `ignore_unreachable: true`):
-- Include `nvme-prep` role
-- Gracefully skips unreachable nodes (node5)
+**Play 1 — NVMe Prep** (`hosts: cluster`):
+- Include `nvme-prep` role on all 6 nodes
 
 **Play 2 — Longhorn Disk Registration** (`hosts: servers[0]`, i.e., node1 only):
 - For each node in `groups['cluster']` that is reachable:
@@ -139,7 +138,6 @@ Four-play structure matching the four user stories. Designed to be run once per 
 ### Key implementation notes
 
 - **eMMC disk key discovery**: The key follows `default-disk-<fsid>` and varies per node. The playbook must query it at runtime with `jq '.spec.disks | keys[] | select(startswith("default-disk"))'` rather than hardcoding.
-- **Node5 handling**: Node5 is unreachable and already `Not Schedulable` in Longhorn. The `nvme-prep` play uses `ignore_unreachable: true`. Plays 2–4 skip node5 (it has no schedulable replicas to migrate and its Longhorn disk entry will not be modified until the node is repaired).
 - **Replica count safety**: With 2 replicas per volume and 6 nodes, evicting one node at a time is safe — the other replica remains available. However, do not evict multiple nodes simultaneously.
 - **No downtime expected**: Longhorn replica rebuild is online. Attached PVCs remain accessible throughout migration.
 
