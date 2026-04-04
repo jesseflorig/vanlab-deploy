@@ -17,7 +17,7 @@
 **Purpose**: Create the role skeleton and playbook file.
 
 - [ ] T001 Create directory structure: `roles/nvme-prep/defaults/`, `roles/nvme-prep/tasks/`, `roles/nvme-prep/handlers/`
-- [ ] T002 [P] Create `roles/nvme-prep/defaults/main.yml` with vars: `nvme_device: /dev/nvme0n1`, `nvme_partition: /dev/nvme0n1p1`, `nvme_mount_path: /mnt/nvme`, `nvme_label: longhorn-nvme`, `nvme_mount_opts: defaults,noatime,nodiratime`, `nvme_longhorn_reserved_bytes: 53687091200`
+- [ ] T002 [P] Create `roles/nvme-prep/defaults/main.yml` with vars: `nvme_device: /dev/nvme0n1`, `nvme_partition: /dev/nvme0n1p1`, `nvme_mount_path: /mnt/nvme`, `nvme_label: longhorn-nvme`, `nvme_mount_opts: "defaults,noatime,nodiratime,nofail,x-systemd.device-timeout=30s"`, `nvme_longhorn_reserved_bytes: 53687091200`
 - [ ] T003 [P] Create `roles/nvme-prep/handlers/main.yml` with a `Reboot node` handler using `ansible.builtin.reboot` (`reboot_timeout: 300`, `post_reboot_delay: 30`)
 - [ ] T004 Create `playbooks/utilities/nvme-migrate.yml` with file header comment explaining purpose, prerequisites, and usage (`ansible-playbook -i hosts.ini playbooks/utilities/nvme-migrate.yml`)
 
@@ -106,9 +106,10 @@
 **Purpose**: Verify the full migration end-to-end and ensure no regressions.
 
 - [ ] T022 Add `tags` to each play in `playbooks/utilities/nvme-migrate.yml` (`nvme-prep`, `longhorn-register`, `longhorn-evict`, `longhorn-cleanup`) so individual phases can be re-run in isolation
-- [ ] T023 [P] Run `ansible-playbook -i hosts.ini playbooks/utilities/disk-health.yml` — all 6 nodes must show NVMe `PRESENT` and the new mount visible in the report
-- [ ] T024 [P] Run `ansible-playbook -i hosts.ini playbooks/cluster/longhorn-smoke-test.yml` — PVC must be provisioned, data written, pod deleted and recreated, data verified persistent; confirms NVMe-backed Longhorn is fully functional
-- [ ] T025 Verify Longhorn UI storage summary shows ~10TB usable (6 × 1.7TB ÷ 2 replicas) replacing the previous ~168GB from eMMC
+- [ ] T023 Add Play 5 (eMMC data cleanup) to `playbooks/utilities/nvme-migrate.yml`: `hosts: cluster`, `become: true` — for each node, assert `/mnt/nvme/longhorn-disk.cfg` exists (confirms NVMe is active Longhorn disk), then remove `/var/lib/longhorn/replicas/` with `ansible.builtin.file: path=/var/lib/longhorn/replicas state=absent` and remove `/var/lib/longhorn/longhorn-disk.cfg` with `ansible.builtin.file: state=absent`; leave `/var/lib/longhorn/` directory intact
+- [ ] T024 [P] Run `ansible-playbook -i hosts.ini playbooks/utilities/disk-health.yml` — all 6 nodes must show NVMe `PRESENT` and the new mount visible in the report
+- [ ] T025 [P] Run `ansible-playbook -i hosts.ini playbooks/cluster/longhorn-smoke-test.yml` — PVC must be provisioned, data written, pod deleted and recreated, data verified persistent; confirms NVMe-backed Longhorn is fully functional
+- [ ] T026 Verify Longhorn UI storage summary shows ~10TB usable (6 × 1.7TB ÷ 2 replicas) replacing the previous ~168GB from eMMC
 
 ---
 
@@ -122,7 +123,7 @@
 - **US2 (Phase 4)**: Depends on US1 complete on all 6 nodes (Longhorn validates disk path at registration)
 - **US3 (Phase 5)**: Depends on US2 complete (`nvme-disk` must be `Schedulable: true`)
 - **US4 (Phase 6)**: Depends on US3 complete (`scheduledReplica` must be empty)
-- **Polish (Phase 7)**: Depends on US4; T023 and T024 can run in parallel
+- **Polish (Phase 7)**: T022 (tags) first, then T023 (eMMC cleanup) sequential, then T024 and T025 can run in parallel
 
 ### Within Each User Story
 
@@ -134,7 +135,7 @@
 
 - T002 and T003 (defaults + handlers) can be written in parallel — different files
 - T004 (playbook stub) can be written in parallel with T002/T003
-- T023 and T024 (validation smoke tests) can run in parallel after T025 is skipped or done first
+- T024 and T025 (validation smoke tests) can run in parallel after T023 (eMMC cleanup) completes
 
 ---
 
@@ -165,3 +166,5 @@
 - The `Reboot node` handler in the `nvme-prep` role only fires when `cmdline.txt` is changed (first run); subsequent runs are fully idempotent with no reboot
 - The playbook is designed to be re-runnable per phase using `--tags`; if a play partially completes, re-running is safe
 - Node5 was previously cordoned but is now uncordoned and treated identically to all other nodes
+- `nofail,x-systemd.device-timeout=30s` in fstab is mandatory — without it, a NVMe enumeration failure at boot drops the node into emergency mode; on server nodes (node1, node3, node5) this risks etcd quorum loss
+- eMMC cleanup (T023) asserts `/mnt/nvme/longhorn-disk.cfg` exists before deleting eMMC replica data — this is the safety gate preventing accidental deletion if run out of order

@@ -15,7 +15,7 @@ Format and mount the 1.7TB NVMe drive (`nvme0n1`) on each cluster node at `/mnt/
 **Target Platform**: Raspberry Pi CM5, arm64, Debian Bookworm (Raspberry Pi OS), K3s
 **Project Type**: Infrastructure playbook + Ansible role
 **Performance Goals**: N/A — migration preserves existing volume availability; no performance regression during migration
-**Constraints**: No volume downtime during migration (Longhorn 2-replica tolerance ensures continuity); eMMC must not be removed until all replicas have migrated
+**Constraints**: No volume downtime during migration (Longhorn 2-replica tolerance ensures continuity); eMMC must not be removed until all replicas have migrated; NVMe mount must use `nofail` to prevent emergency-mode boot on drive failure (critical for etcd quorum on server nodes)
 
 ## Constitution Check
 
@@ -82,8 +82,10 @@ nvme_device: /dev/nvme0n1
 nvme_partition: /dev/nvme0n1p1
 nvme_mount_path: /mnt/nvme
 nvme_label: longhorn-nvme
-nvme_mount_opts: defaults,noatime,nodiratime
+nvme_mount_opts: defaults,noatime,nodiratime,nofail,x-systemd.device-timeout=30s
 ```
+
+`nofail` is mandatory: if the NVMe fails to enumerate at boot (PCIe issue, connector problem), the node must continue booting so K3s and etcd remain up. Without `nofail`, a drive failure drops the node into emergency mode — on server nodes (node1, node3, node5) this risks etcd quorum loss. `x-systemd.device-timeout=30s` prevents systemd from hanging indefinitely waiting for the device.
 
 **File**: `roles/nvme-prep/tasks/main.yml` — task sequence:
 
@@ -140,6 +142,8 @@ Four-play structure matching the four user stories. Designed to be run once per 
 - **eMMC disk key discovery**: The key follows `default-disk-<fsid>` and varies per node. The playbook must query it at runtime with `jq '.spec.disks | keys[] | select(startswith("default-disk"))'` rather than hardcoding.
 - **Replica count safety**: With 2 replicas per volume and 6 nodes, evicting one node at a time is safe — the other replica remains available. However, do not evict multiple nodes simultaneously.
 - **No downtime expected**: Longhorn replica rebuild is online. Attached PVCs remain accessible throughout migration.
+- **eMMC cleanup after migration**: Once Longhorn disk removal (US4) is confirmed, Play 4 includes a cleanup task that removes `/var/lib/longhorn/replicas/` and `/var/lib/longhorn/longhorn-disk.cfg` from the eMMC on each node. The `/var/lib/longhorn/` directory itself is preserved (Longhorn's compiled-in default path; removing it entirely could cause issues on cluster rebuild). This reclaims the 11–29GB of replica data currently occupying eMMC per node.
+- **`nofail` mount**: Longhorn will mark the disk `not-ready` if the NVMe is absent at runtime (e.g., after a failed boot where the drive didn't enumerate). This is the correct failure mode — volumes rebuild on surviving nodes rather than the entire node disappearing from the cluster.
 
 ### No `data-model.md` or `contracts/`
 
