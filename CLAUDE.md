@@ -1,6 +1,6 @@
 # vanlab Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-04-02
+Auto-generated from all feature plans. Last updated: 2026-04-04
 
 ## Active Technologies
 - YAML (Ansible 2.x) — existing project conventions (002-project-reorganization)
@@ -13,6 +13,8 @@ Auto-generated from all feature plans. Last updated: 2026-04-02
 - Longhorn `storageClassName: longhorn` — Prometheus 20Gi, Grafana 5Gi, Alertmanager 5Gi (009-prometheus-longhorn-monitoring)
 - Longhorn `storageClass: longhorn` — Loki 20Gi PVC (014-loki-log-shipping)
 - Longhorn `storageClass: longhorn` — Mosquitto: 1Gi, HA: 10Gi, Node-RED: 5Gi, InfluxDB: 20Gi (016-home-automation-stack)
+- YAML (Ansible 2.x) — follows existing project conventions + `community.general.parted`, `community.general.filesystem`, `ansible.posix.mount` (all in existing collections); `kubectl` (on nodes via sudo); `e2fsprogs`, `parted` (apt) (037-nvme-migration)
+- ext4 filesystem on `nvme0n1p1`; Longhorn v1.11.1 `nodes.longhorn.io` CRD for disk registration (037-nvme-migration)
 
 - YAML (Ansible 2.x) — follows existing project conventions + `smartmontools` (apt) — installed idempotently by the playbook as a (001-node-disk-health)
 
@@ -32,9 +34,9 @@ tests/
 YAML (Ansible 2.x) — follows existing project conventions: Follow standard conventions
 
 ## Recent Changes
+- 037-nvme-migration: Added YAML (Ansible 2.x) — follows existing project conventions + `community.general.parted`, `community.general.filesystem`, `ansible.posix.mount` (all in existing collections); `kubectl` (on nodes via sudo); `e2fsprogs`, `parted` (apt)
 - 016-home-automation-stack: Added YAML (Ansible 2.x) — follows existing project conventions
 - 014-loki-log-shipping: Added YAML (Ansible 2.x) — follows existing project conventions
-- 009-prometheus-longhorn-monitoring: Added YAML (Ansible 2.x) — existing project conventions + `prometheus-community/kube-prometheus-stack` Helm chart; Longhorn (already deployed)
 
 
 <!-- MANUAL ADDITIONS START -->
