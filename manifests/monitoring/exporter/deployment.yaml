@@ -1,0 +1,61 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opnsense-exporter
+  namespace: monitoring
+  labels:
+    app: opnsense-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opnsense-exporter
+  template:
+    metadata:
+      labels:
+        app: opnsense-exporter
+    spec:
+      containers:
+        - name: opnsense-exporter
+          image: ghcr.io/athennamind/opnsense-exporter:0.0.14
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: OPNSENSE_EXPORTER_OPS_HOST
+              value: "10.1.1.1"
+            - name: OPNSENSE_EXPORTER_OPS_PROTOCOL
+              value: "https"
+            - name: OPNSENSE_EXPORTER_OPS_INSECURE
+              value: "true"
+            - name: OPNSENSE_EXPORTER_OPS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: opnsense-exporter-credentials
+                  key: api-key
+            - name: OPNSENSE_EXPORTER_OPS_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: opnsense-exporter-credentials
+                  key: api-secret
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
