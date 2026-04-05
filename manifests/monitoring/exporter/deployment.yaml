@@ -19,6 +19,9 @@ spec:
       containers:
         - name: opnsense-exporter
           image: ghcr.io/athennamind/opnsense-exporter:0.0.14
+          args:
+            - --opnsense.address=10.1.1.1
+            - --exporter.instance-label=opnsense
           ports:
             - name: metrics
               containerPort: 8080
@@ -49,13 +52,13 @@ spec:
               memory: 128Mi
           livenessProbe:
             httpGet:
-              path: /healthz
+              path: /metrics
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 30
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /metrics
               port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
