@@ -1,0 +1,16 @@
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: opnsense-exporter
+  namespace: monitoring
+  labels:
+    # Ensures Prometheus Operator discovers this ScrapeConfig
+    release: kube-prometheus-stack
+spec:
+  staticConfigs:
+    - targets:
+        - opnsense-exporter.monitoring.svc.cluster.local:8080
+  metricsPath: /metrics
+  scrapeInterval: 60s
+  jobName: opnsense-exporter

@@ -15,6 +15,8 @@ Auto-generated from all feature plans. Last updated: 2026-04-04
 - Longhorn `storageClass: longhorn` — Mosquitto: 1Gi, HA: 10Gi, Node-RED: 5Gi, InfluxDB: 20Gi (016-home-automation-stack)
 - YAML (Ansible 2.x) — follows existing project conventions + `community.general.parted`, `community.general.filesystem`, `ansible.posix.mount` (all in existing collections); `kubectl` (on nodes via sudo); `e2fsprogs`, `parted` (apt) (037-nvme-migration)
 - ext4 filesystem on `nvme0n1p1`; Longhorn v1.11.1 `nodes.longhorn.io` CRD for disk registration (037-nvme-migration)
+- YAML (Kubernetes manifests + Ansible 2.x) (038-opnsense-metrics)
+- N/A — exporter is stateless; no PVC required (038-opnsense-metrics)
 
 - YAML (Ansible 2.x) — follows existing project conventions + `smartmontools` (apt) — installed idempotently by the playbook as a (001-node-disk-health)
 
@@ -34,9 +36,9 @@ tests/
 YAML (Ansible 2.x) — follows existing project conventions: Follow standard conventions
 
 ## Recent Changes
+- 038-opnsense-metrics: Added YAML (Kubernetes manifests + Ansible 2.x)
 - 037-nvme-migration: Added YAML (Ansible 2.x) — follows existing project conventions + `community.general.parted`, `community.general.filesystem`, `ansible.posix.mount` (all in existing collections); `kubectl` (on nodes via sudo); `e2fsprogs`, `parted` (apt)
 - 016-home-automation-stack: Added YAML (Ansible 2.x) — follows existing project conventions
-- 014-loki-log-shipping: Added YAML (Ansible 2.x) — follows existing project conventions
 
 
 <!-- MANUAL ADDITIONS START -->

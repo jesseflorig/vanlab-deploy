@@ -1,0 +1,10 @@
+---
+# monitoring namespace — sync wave 0 so it exists before certs, SealedSecrets, and workloads.
+# The kube-prometheus-stack Ansible role also creates this namespace; this manifest makes it
+# idempotent from the ArgoCD side and ensures ArgoCD owns its lifecycle.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
