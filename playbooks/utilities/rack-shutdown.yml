@@ -1,0 +1,218 @@
+---
+# Gracefully shut down the entire vanlab rack in dependency order:
+#   agents → servers → edge host → OPNsense
+#
+# Usage:
+#   make shutdown              # full rack shutdown
+#   make shutdown-dry-run      # dry-run preview (--check)
+#
+#   ansible-playbook -i hosts.ini playbooks/utilities/rack-shutdown.yml
+#   ansible-playbook -i hosts.ini playbooks/utilities/rack-shutdown.yml --check
+#
+# Prerequisites:
+#   - SSH access to all hosts (fleetadmin / ~/.ssh/id_rsa)
+#   - kubectl configured on the operator workstation (for Longhorn pre-flight)
+#   - OPNsense in [network] inventory group with ansible_ssh_private_key_file set
+#
+# Notes:
+#   - The OPNsense step is the last action; network connectivity drops immediately after.
+#   - To shut down a single node for maintenance, use drain-shutdown.yml instead.
+
+# ---------------------------------------------------------------------------
+# Play 1: Pre-flight checks
+# ---------------------------------------------------------------------------
+- name: Pre-flight checks
+  hosts: localhost
+  gather_facts: false
+  tasks:
+
+    - name: "=== Rack Shutdown: Pre-flight checks ==="
+      ansible.builtin.debug:
+        msg: "Starting vanlab rack shutdown sequence. Checking host reachability and cluster health."
+      check_mode: false
+
+    - name: "DRY RUN — no changes will be made"
+      ansible.builtin.debug:
+        msg: "DRY RUN MODE — this run will show planned actions only. No hosts will be shut down."
+      when: ansible_check_mode
+      check_mode: false
+
+    - name: Check reachability of all cluster nodes
+      ansible.builtin.wait_for_connection:
+        timeout: 10
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['cluster'] + groups['compute'] + groups['network'] }}"
+      ignore_unreachable: true
+      register: reachability
+      check_mode: false
+
+    - name: Warn about unreachable hosts
+      ansible.builtin.debug:
+        msg: "WARNING: Host {{ item.item }} is unreachable and will be skipped."
+      loop: "{{ reachability.results }}"
+      when: item is failed or item is unreachable
+      check_mode: false
+
+    - name: Check Longhorn volume health
+      ansible.builtin.command: >
+        kubectl get volumes.longhorn.io -n longhorn-system
+        -o jsonpath='{range .items[?(@.status.robustness!="healthy")]}{.metadata.name}{"\t"}{.status.robustness}{"\n"}{end}'
+      delegate_to: localhost
+      register: longhorn_degraded
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Warn about degraded Longhorn volumes
+      ansible.builtin.debug:
+        msg: "WARNING: Degraded Longhorn volumes detected:\n{{ longhorn_degraded.stdout }}"
+      when: longhorn_degraded.stdout | length > 0
+      check_mode: false
+
+    - name: Pause before proceeding if warnings were emitted
+      ansible.builtin.pause:
+        seconds: 5
+        prompt: "Pre-flight warnings detected above — press Ctrl+C then A to abort, or wait 5 seconds to continue"
+      when: >
+        (longhorn_degraded.stdout | length > 0) or
+        (reachability.results | selectattr('failed', 'defined') | selectattr('failed') | list | length > 0)
+      check_mode: false
+
+# ---------------------------------------------------------------------------
+# Play 2: Drain and shut down agent nodes
+# ---------------------------------------------------------------------------
+- name: Drain and shut down agent nodes
+  hosts: agents
+  gather_facts: false
+  become: true
+  serial: 1
+  tasks:
+
+    - name: "=== Phase 2: Draining and shutting down agent node {{ inventory_hostname }} ==="
+      ansible.builtin.debug:
+        msg: "Draining {{ inventory_hostname }} from {{ groups['servers'][0] }}, then halting."
+      check_mode: false
+
+    - name: "Drain {{ inventory_hostname }} from cluster"
+      ansible.builtin.command: >
+        kubectl drain {{ inventory_hostname }}
+        --ignore-daemonsets
+        --delete-emptydir-data
+        --timeout=600s
+      delegate_to: "{{ groups['servers'][0] }}"
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      changed_when: true
+
+    - name: "Stop k3s-agent on {{ inventory_hostname }}"
+      ansible.builtin.systemd:
+        name: k3s-agent
+        state: stopped
+
+    - name: "Halt {{ inventory_hostname }}"
+      ansible.builtin.command: shutdown -h now
+      async: 5
+      poll: 0
+      changed_when: true
+
+# ---------------------------------------------------------------------------
+# Play 3: Drain and shut down server nodes
+# ---------------------------------------------------------------------------
+- name: Drain and shut down server nodes
+  hosts: servers
+  gather_facts: false
+  become: true
+  serial: 1
+  vars:
+    # Peer to drain from: use the next server in the list, or skip if this is the last one.
+    # servers[0] → drain from servers[1]
+    # servers[1] → drain from servers[2]
+    # servers[2] → no drain (last node; no surviving API server)
+    server_index: "{{ groups['servers'].index(inventory_hostname) }}"
+    drain_peer: >-
+      {{
+        groups['servers'][server_index | int + 1]
+        if (server_index | int + 1) < groups['servers'] | length
+        else ''
+      }}
+    is_last_server: "{{ drain_peer == '' }}"
+  tasks:
+
+    - name: "=== Phase 3: Draining and shutting down server node {{ inventory_hostname }} ==="
+      ansible.builtin.debug:
+        msg: >-
+          {{
+            'Last server — skipping drain (no surviving API server). Stopping k3s and halting.'
+            if is_last_server | bool
+            else 'Draining ' ~ inventory_hostname ~ ' from ' ~ drain_peer ~ ', then halting.'
+          }}
+      check_mode: false
+
+    - name: "Drain {{ inventory_hostname }} from cluster"
+      ansible.builtin.command: >
+        kubectl drain {{ inventory_hostname }}
+        --ignore-daemonsets
+        --delete-emptydir-data
+        --timeout=600s
+      delegate_to: "{{ drain_peer }}"
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      changed_when: true
+      when: not (is_last_server | bool)
+
+    - name: "Stop k3s on {{ inventory_hostname }}"
+      ansible.builtin.systemd:
+        name: k3s
+        state: stopped
+
+    - name: "Halt {{ inventory_hostname }}"
+      ansible.builtin.command: shutdown -h now
+      async: 5
+      poll: 0
+      changed_when: true
+
+# ---------------------------------------------------------------------------
+# Play 4: Shut down edge host
+# ---------------------------------------------------------------------------
+- name: Shut down edge host
+  hosts: compute
+  gather_facts: false
+  become: true
+  tasks:
+
+    - name: "=== Phase 4: Shutting down edge host {{ inventory_hostname }} ==="
+      ansible.builtin.debug:
+        msg: "Stopping cloudflared tunnel, then halting {{ inventory_hostname }} ({{ ansible_host }})."
+      check_mode: false
+
+    - name: "Stop cloudflared on {{ inventory_hostname }}"
+      ansible.builtin.systemd:
+        name: cloudflared
+        state: stopped
+
+    - name: "Halt {{ inventory_hostname }}"
+      ansible.builtin.command: shutdown -h now
+      async: 5
+      poll: 0
+      changed_when: true
+
+# ---------------------------------------------------------------------------
+# Play 5: Shut down OPNsense
+# ---------------------------------------------------------------------------
+- name: Shut down OPNsense
+  hosts: network
+  gather_facts: false
+  become: true
+  tasks:
+
+    - name: "=== Phase 5: Shutting down OPNsense ==="
+      ansible.builtin.debug:
+        msg: "OPNsense shutdown command sent — network connectivity will drop immediately after this step."
+      check_mode: false
+
+    - name: "Halt OPNsense ({{ inventory_hostname }})"
+      ansible.builtin.command: shutdown -h now
+      async: 5
+      poll: 0
+      changed_when: true
+      ignore_unreachable: true
