@@ -1,38 +1,53 @@
 ---
-# hailo.yml — Install Hailo-8 PCIe driver and runtime, verify device node.
+# hailo.yml — Install Hailo-8 PCIe driver and runtime from pre-staged .deb packages.
+#
+# Operator must download packages from hailo.ai/developer-zone and stage them at:
+#   roles/nvr/files/hailo/hailort_*_amd64.deb        (HailoRT runtime + CLI)
+#   roles/nvr/files/hailo/hailort-dkms_*_all.deb     (PCIe kernel module via DKMS)
+#
+# Both packages are free to download after registering at hailo.ai.
 
-# ── Raspberry Pi APT repository ───────────────────────────────────────────────
+# ── Cleanup any leftover RPi APT artifacts (idempotent) ──────────────────────
 
-- name: Download Raspberry Pi APT signing key
-  ansible.builtin.get_url:
-    url: https://archive.raspberrypi.com/debian/raspberrypi.gpg.key
-    dest: /etc/apt/keyrings/raspberrypi.gpg.key
-    mode: "0644"
-    force: false
+- name: Remove stale Raspberry Pi APT key if present
+  ansible.builtin.file:
+    path: /etc/apt/keyrings/raspberrypi.gpg.key
+    state: absent
 
-- name: Add Raspberry Pi APT repository
-  ansible.builtin.apt_repository:
-    repo: >-
-      deb [signed-by=/etc/apt/keyrings/raspberrypi.gpg.key]
-      https://archive.raspberrypi.com/debian/
-      {{ ansible_distribution_release }} main
-    filename: raspberrypi
-    state: present
+# ── DKMS build dependencies ───────────────────────────────────────────────────
 
-# ── Kernel headers ────────────────────────────────────────────────────────────
-
-- name: Install matching kernel headers
+- name: Install DKMS and kernel build dependencies
   ansible.builtin.apt:
-    name: "linux-headers-{{ ansible_kernel }}"
+    name:
+      - dkms
+      - "linux-headers-{{ ansible_kernel }}"
+      - build-essential
     state: present
     update_cache: true
 
-# ── Hailo driver and runtime ──────────────────────────────────────────────────
+# ── Copy and install Hailo .deb packages ─────────────────────────────────────
 
-- name: Install hailo-all meta-package (driver + HailoRT + Python bindings)
+- name: Find staged Hailo .deb packages
+  ansible.builtin.find:
+    paths: "{{ role_path }}/files/hailo"
+    patterns: "*.deb"
+  register: hailo_debs
+  delegate_to: localhost
+  become: false
+  failed_when: hailo_debs.files | length == 0
+
+- name: Copy Hailo .deb packages to host
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    dest: "/tmp/{{ item.path | basename }}"
+    mode: "0644"
+  loop: "{{ hailo_debs.files }}"
+
+- name: Install Hailo .deb packages
   ansible.builtin.apt:
-    name: hailo-all
+    deb: "/tmp/{{ item.path | basename }}"
     state: present
+  loop: "{{ hailo_debs.files }}"
   notify: reload-udev
 
 # ── udev rules ────────────────────────────────────────────────────────────────
