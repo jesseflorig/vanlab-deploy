@@ -20,7 +20,7 @@
 
 - name: Download Docker GPG key
   ansible.builtin.get_url:
-    url: https://download.docker.com/linux/debian/gpg
+    url: https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg
     dest: /etc/apt/keyrings/docker.asc
     mode: "0644"
     force: false
@@ -28,9 +28,9 @@
 - name: Add Docker APT repository
   ansible.builtin.apt_repository:
     repo: >-
-      deb [arch={{ ansible_architecture | replace('aarch64', 'arm64') }}
+      deb [arch={{ ansible_architecture | replace('x86_64', 'amd64') | replace('aarch64', 'arm64') }}
       signed-by=/etc/apt/keyrings/docker.asc]
-      https://download.docker.com/linux/debian
+      https://download.docker.com/linux/{{ ansible_distribution | lower }}
       {{ ansible_distribution_release }} stable
     filename: docker
     state: present
