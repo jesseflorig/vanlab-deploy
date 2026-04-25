@@ -1,0 +1,66 @@
+# Frigate NVR configuration — managed by Ansible (nvr role).
+# Do not edit directly on the host; changes will be overwritten on re-provision.
+
+mqtt:
+  enabled: true
+  host: "{{ nvr_mqtt_broker_ip }}"
+  port: 8883
+  tls_ca_certs: /config/certs/ca.crt
+  tls_client_cert: /config/certs/frigate-client.crt
+  tls_client_key: /config/certs/frigate-client.key
+  topic_prefix: "{{ nvr_mqtt_topic_prefix }}"
+  client_id: "{{ nvr_mqtt_client_id }}"
+
+detectors:
+  hailo8:
+    type: hailo8
+    device: PCIe
+
+model:
+  path: /config/model_cache/hailo/yolov8s.hef
+  input_tensor: nhwc
+  input_pixel_format: rgb
+  model_type: yolo-generic
+  width: 640
+  height: 640
+
+record:
+  enabled: true
+  retain:
+    days: {{ nvr_recording_retain_days }}
+    mode: motion
+  events:
+    retain:
+      default: {{ nvr_clips_retain_days }}
+      mode: active_objects
+
+{% if nvr_cameras | length > 0 %}
+cameras:
+{% for cam in nvr_cameras %}
+  {{ cam.name }}:
+    ffmpeg:
+      inputs:
+        - path: "{{ cam.rtsp_url }}"
+          roles:
+            - detect
+            - record
+    detect:
+      enabled: true
+      width: {{ cam.width }}
+      height: {{ cam.height }}
+      fps: 5
+    objects:
+      track:
+        - person
+        - car
+        - dog
+        - cat
+    record:
+      enabled: true
+    snapshots:
+      enabled: true
+{% endfor %}
+{% else %}
+# No cameras configured. Add nvr_cameras entries in group_vars/all.yml.
+cameras: {}
+{% endif %}

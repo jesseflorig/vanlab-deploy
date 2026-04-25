@@ -1,0 +1,25 @@
+---
+# Longhorn RWX PVC for Frigate event clips (50Gi).
+# The longhorn.external.share annotation causes Longhorn to create a
+# share-manager pod and a LoadBalancer Service exposing the volume via NFSv4.
+# The NVR host mounts this NFS endpoint at /mnt/frigate-clips.
+#
+# After ArgoCD syncs this manifest, obtain the NFS endpoint with:
+#   kubectl get svc -n longhorn-system -l longhorn.io/pvc-name=frigate-clips \
+#     -o jsonpath='{.items[0].spec.clusterIP}'
+# Set nvr_longhorn_nfs_ip and nvr_longhorn_nfs_path in group_vars/all.yml,
+# then run Phase B of the provisioning playbook.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: frigate-clips
+  namespace: frigate
+  annotations:
+    longhorn.external.share: "true"
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: longhorn-rwx
+  resources:
+    requests:
+      storage: 50Gi

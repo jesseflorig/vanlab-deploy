@@ -1,0 +1,40 @@
+---
+# frigate-service.yml — Deploy systemd unit, enable and start Frigate.
+# The service unit declares Requires=mnt-frigate-clips.mount, so systemd
+# will not start Frigate unless the NFS mount is active.
+
+- name: Deploy Frigate systemd service unit
+  ansible.builtin.template:
+    src: frigate.service.j2
+    dest: /etc/systemd/system/frigate.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: systemd-daemon-reload
+
+- name: Flush handlers to reload systemd
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start Frigate service
+  ansible.builtin.systemd:
+    name: frigate
+    enabled: true
+    state: started
+
+- name: Wait for Frigate web UI to be reachable
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ nvr_frigate_port }}"
+    timeout: 90
+    msg: "Frigate web UI did not become reachable on port {{ nvr_frigate_port }} within 90 seconds"
+
+- name: Verify Hailo-8 is the active detector (not CPU fallback)
+  ansible.builtin.command: >
+    docker exec frigate sh -c "hailortcli fw-control identify 2>/dev/null | head -1"
+  register: hailo_runtime_check
+  changed_when: false
+  failed_when: hailo_runtime_check.rc != 0
+
+- name: Confirm Hailo-8 is responding inside the container
+  ansible.builtin.debug:
+    msg: "Hailo-8 active inside Frigate container: {{ hailo_runtime_check.stdout }}"

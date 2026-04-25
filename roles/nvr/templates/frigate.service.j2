@@ -1,0 +1,26 @@
+[Unit]
+Description=Frigate NVR (Hailo-8 accelerated)
+Documentation=https://docs.frigate.video
+After=docker.service network-online.target mnt-frigate\\x2dclips.mount
+Requires=docker.service mnt-frigate\\x2dclips.mount
+
+[Service]
+Restart=always
+RestartSec=10
+ExecStartPre=-/usr/bin/docker stop frigate
+ExecStartPre=-/usr/bin/docker rm frigate
+ExecStart=/usr/bin/docker run \
+  --name frigate \
+  --privileged \
+  --shm-size=256m \
+  -p {{ nvr_frigate_port }}:5000 \
+  -p 8554:8554 \
+  --device /dev/hailo0:/dev/hailo0 \
+  -v /var/lib/frigate/config:/config \
+  -v /var/lib/frigate/media:/media/frigate \
+  -v /mnt/frigate-clips:/media/frigate/clips \
+  {{ nvr_frigate_image }}
+ExecStop=/usr/bin/docker stop frigate
+
+[Install]
+WantedBy=multi-user.target

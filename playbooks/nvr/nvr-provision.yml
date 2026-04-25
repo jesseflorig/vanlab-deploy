@@ -1,0 +1,29 @@
+---
+# nvr-provision.yml
+# Provisions the dedicated NVR host at 10.1.10.11 running Frigate with Hailo-8.
+#
+# Two-phase execution is required:
+#
+#   Phase A (before ArgoCD sync + Longhorn NFS endpoint discovery):
+#     ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml \
+#       --tags host-setup,hailo,frigate-config
+#
+#   Phase B (after ArgoCD syncs manifests/frigate/ and nvr_longhorn_nfs_ip is set):
+#     ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml \
+#       --tags nfs-mount,frigate-service
+#
+#   Full idempotent re-run (both phases):
+#     ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml
+#
+# Credentials sourced from group_vars/all.yml (gitignored):
+#   nvr_frigate_admin_password, nvr_mqtt_client_cert, nvr_mqtt_client_key,
+#   nvr_mqtt_ca_cert, nvr_longhorn_nfs_ip, nvr_longhorn_nfs_path
+#
+# See specs/041-nvr-frigate-hailo/quickstart.md for full runbook.
+
+- name: Provision NVR host
+  hosts: nvr
+  become: true
+  gather_facts: true
+  roles:
+    - role: nvr

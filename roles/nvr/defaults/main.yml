@@ -1,0 +1,30 @@
+---
+# Default variable values for the nvr role.
+# Secret values (nvr_frigate_admin_password, nvr_mqtt_*) must be set in
+# group_vars/all.yml (gitignored). These defaults are non-secret operational
+# tuning parameters only.
+
+nvr_host_ip: "10.1.10.11"
+
+# Recording retention (local NVMe)
+nvr_recording_retain_days: 7
+
+# Event clip retention (Longhorn NFS)
+nvr_clips_retain_days: 30
+
+# Camera list — override in group_vars/all.yml
+nvr_cameras: []
+
+# Longhorn NFS — populated after ArgoCD syncs and NFS endpoint is known
+nvr_longhorn_nfs_ip: ""
+nvr_longhorn_nfs_path: ""
+
+# Frigate container image
+nvr_frigate_image: "ghcr.io/blakeblackshear/frigate:stable"
+
+# Frigate web UI port (host-bound)
+nvr_frigate_port: 5000
+
+# MQTT topic prefix and client ID
+nvr_mqtt_topic_prefix: "frigate"
+nvr_mqtt_client_id: "frigate-nvr"

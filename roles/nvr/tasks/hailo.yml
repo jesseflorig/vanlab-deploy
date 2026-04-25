@@ -1,0 +1,69 @@
+---
+# hailo.yml — Install Hailo-8 PCIe driver and runtime, verify device node.
+
+# ── Raspberry Pi APT repository ───────────────────────────────────────────────
+
+- name: Download Raspberry Pi APT signing key
+  ansible.builtin.get_url:
+    url: https://archive.raspberrypi.com/debian/raspberrypi.gpg.key
+    dest: /etc/apt/keyrings/raspberrypi.gpg.key
+    mode: "0644"
+    force: false
+
+- name: Add Raspberry Pi APT repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by=/etc/apt/keyrings/raspberrypi.gpg.key]
+      https://archive.raspberrypi.com/debian/
+      {{ ansible_distribution_release }} main
+    filename: raspberrypi
+    state: present
+
+# ── Kernel headers ────────────────────────────────────────────────────────────
+
+- name: Install matching kernel headers
+  ansible.builtin.apt:
+    name: "linux-headers-{{ ansible_kernel }}"
+    state: present
+    update_cache: true
+
+# ── Hailo driver and runtime ──────────────────────────────────────────────────
+
+- name: Install hailo-all meta-package (driver + HailoRT + Python bindings)
+  ansible.builtin.apt:
+    name: hailo-all
+    state: present
+  notify: reload-udev
+
+# ── udev rules ────────────────────────────────────────────────────────────────
+
+- name: Deploy Hailo udev rules
+  ansible.builtin.template:
+    src: 51-hailo-udev.rules.j2
+    dest: /etc/udev/rules.d/51-hailo-udev.rules
+    mode: "0644"
+    owner: root
+    group: root
+  notify: reload-udev
+
+- name: Flush handlers to apply udev rules immediately
+  ansible.builtin.meta: flush_handlers
+
+# ── Device verification ───────────────────────────────────────────────────────
+
+- name: Verify Hailo-8 device node exists
+  ansible.builtin.stat:
+    path: /dev/hailo0
+  register: hailo_device
+  failed_when: not hailo_device.stat.exists
+  changed_when: false
+
+- name: Verify Hailo-8 firmware responds
+  ansible.builtin.command: hailortcli fw-control identify
+  register: hailo_identify
+  changed_when: false
+  failed_when: hailo_identify.rc != 0
+
+- name: Display Hailo-8 firmware information
+  ansible.builtin.debug:
+    msg: "Hailo-8 identified: {{ hailo_identify.stdout_lines[0] | default('see full output') }}"

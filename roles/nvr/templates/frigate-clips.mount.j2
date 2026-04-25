@@ -1,0 +1,13 @@
+[Unit]
+Description=Longhorn NFS Clips Volume for Frigate
+After=network-online.target
+Wants=network-online.target
+
+[Mount]
+What={{ nvr_longhorn_nfs_ip }}:{{ nvr_longhorn_nfs_path }}
+Where=/mnt/frigate-clips
+Type=nfs
+Options=vers=4.1,noresvport,_netdev,soft,timeo=600,retrans=5
+
+[Install]
+WantedBy=multi-user.target
