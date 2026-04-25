@@ -10,22 +10,21 @@
 
 ## Step 1: Set Required Variables
 
-Edit `group_vars/all.yml` and populate all `nvr_*` variables. Leave `nvr_longhorn_nfs_ip` and `nvr_longhorn_nfs_path` empty for now.
+Edit `group_vars/all.yml` and populate the `nvr_*` variables. Leave `nvr_longhorn_nfs_ip` and `nvr_longhorn_nfs_path` empty for now. MQTT cert material is read automatically from the cluster — no PEM values to paste.
 
 ```yaml
 nvr_host_ip: "10.1.10.11"
 nvr_frigate_admin_password: "your-password"
 nvr_mqtt_broker_ip: "10.1.20.x"
-# paste cert/key PEM content for MQTT auth
 ```
 
-## Step 2: Run Phase A (Host Setup)
+## Step 2: Run Phase A (Host Software)
 
 ```bash
-ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml --tags host-setup,hailo,frigate-config
+ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml --tags host-setup,hailo
 ```
 
-This installs Docker, Hailo driver, udev rules, and renders the Frigate config (without starting the service yet).
+This installs Docker, Hailo driver, and udev rules. The Frigate config is deferred to Phase B so it can read the MQTT client cert issued by cert-manager after ArgoCD sync.
 
 **Verify Hailo driver**:
 ```bash
@@ -61,10 +60,10 @@ nvr_longhorn_nfs_ip: "<cluster-ip-from-above>"
 nvr_longhorn_nfs_path: "<path-from-above>"
 ```
 
-## Step 5: Run Phase B (NFS Mount + Service Start)
+## Step 5: Run Phase B (Frigate Config + NFS Mount + Service Start)
 
 ```bash
-ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml --tags nfs-mount,frigate-service
+ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml --tags frigate-config,nfs-mount,frigate-service
 ```
 
 ## Step 6: Verify

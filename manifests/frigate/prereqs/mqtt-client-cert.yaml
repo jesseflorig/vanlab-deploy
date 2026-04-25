@@ -1,0 +1,22 @@
+---
+# sync wave 4 — MQTT client certificate for Frigate → Mosquitto authentication.
+# Issued by home-automation-ca (same CA that signs all MQTT client certs).
+# The resulting Secret (frigate-mqtt-client) is read by the nvr role at
+# provision time and written to /var/lib/frigate/config/certs/ on the NVR host.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: frigate-mqtt-client
+  namespace: frigate
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  secretName: frigate-mqtt-client
+  commonName: frigate
+  issuerRef:
+    name: home-automation-ca
+    kind: ClusterIssuer
+  usages:
+    - client auth
+  duration: 8760h
+  renewBefore: 720h
