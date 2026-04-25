@@ -1,5 +1,10 @@
 ---
-# frigate-config.yml — Create config directories, deploy certificates, render config.
+# frigate-config.yml — Create config directories, read MQTT certs from cluster,
+# deploy certificates, render Frigate config.
+#
+# Requires ArgoCD to have synced manifests/frigate/ and cert-manager to have
+# issued the frigate-mqtt-client Certificate before this task file runs.
+# Run as part of Phase B: --tags frigate-config,nfs-mount,frigate-service
 
 # ── Directories ───────────────────────────────────────────────────────────────
 
@@ -16,31 +21,77 @@
     - /var/lib/frigate/config/model_cache
     - /var/lib/frigate/media
 
-# ── MQTT certificates ─────────────────────────────────────────────────────────
+# ── Read MQTT cert material from cluster ──────────────────────────────────────
+
+- name: Wait for frigate-mqtt-client certificate to become Ready
+  ansible.builtin.command: >
+    kubectl wait certificate/frigate-mqtt-client
+    -n frigate
+    --for=condition=Ready
+    --timeout=120s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  delegate_to: "{{ groups['servers'][0] }}"
+  become: true
+
+- name: Read MQTT client certificate from cluster secret
+  ansible.builtin.command: >
+    kubectl get secret frigate-mqtt-client -n frigate
+    -o jsonpath='{.data.tls\.crt}'
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: mqtt_client_cert_b64
+  changed_when: false
+  delegate_to: "{{ groups['servers'][0] }}"
+  become: true
+
+- name: Read MQTT client key from cluster secret
+  ansible.builtin.command: >
+    kubectl get secret frigate-mqtt-client -n frigate
+    -o jsonpath='{.data.tls\.key}'
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: mqtt_client_key_b64
+  changed_when: false
+  no_log: true
+  delegate_to: "{{ groups['servers'][0] }}"
+  become: true
+
+- name: Read MQTT CA certificate from cluster secret
+  ansible.builtin.command: >
+    kubectl get secret mosquitto-client-ca -n home-automation
+    -o jsonpath='{.data.ca\.crt}'
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: mqtt_ca_cert_b64
+  changed_when: false
+  delegate_to: "{{ groups['servers'][0] }}"
+  become: true
+
+# ── Deploy certificates to NVR host ──────────────────────────────────────────
 
 - name: Deploy MQTT CA certificate
   ansible.builtin.copy:
-    content: "{{ nvr_mqtt_ca_cert }}"
+    content: "{{ mqtt_ca_cert_b64.stdout | b64decode }}"
     dest: /var/lib/frigate/config/certs/ca.crt
     owner: root
     group: root
     mode: "0644"
-  no_log: true
   notify: restart-frigate
 
 - name: Deploy MQTT client certificate
   ansible.builtin.copy:
-    content: "{{ nvr_mqtt_client_cert }}"
+    content: "{{ mqtt_client_cert_b64.stdout | b64decode }}"
     dest: /var/lib/frigate/config/certs/frigate-client.crt
     owner: root
     group: root
     mode: "0644"
-  no_log: true
   notify: restart-frigate
 
 - name: Deploy MQTT client private key
   ansible.builtin.copy:
-    content: "{{ nvr_mqtt_client_key }}"
+    content: "{{ mqtt_client_key_b64.stdout | b64decode }}"
     dest: /var/lib/frigate/config/certs/frigate-client.key
     owner: root
     group: root

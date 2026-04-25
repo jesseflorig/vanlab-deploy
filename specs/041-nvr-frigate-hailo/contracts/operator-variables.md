@@ -9,11 +9,10 @@ This contract defines what an operator must provide in `group_vars/all.yml` to r
 | `nvr_host_ip` | string | IP of the NVR host — must be `10.1.10.11` |
 | `nvr_frigate_admin_password` | string | Frigate web UI admin password |
 | `nvr_mqtt_broker_ip` | string | Internal IP of the MQTT broker (10.1.20.x) |
-| `nvr_mqtt_client_cert` | PEM string | Client cert for Frigate → broker MQTTS auth |
-| `nvr_mqtt_client_key` | PEM string | Client private key (mode 0600 on host) |
-| `nvr_mqtt_ca_cert` | PEM string | CA cert for broker TLS verification |
 | `nvr_longhorn_nfs_ip` | string | LoadBalancer IP of Longhorn NFS share-manager |
 | `nvr_longhorn_nfs_path` | string | NFS export path (e.g., `/pvc-<uuid>`) |
+
+> **MQTT cert material is not an operator variable.** The playbook reads the `frigate-mqtt-client` Secret and `mosquitto-client-ca` Secret from the cluster automatically via kubectl. No PEM content needs to be set in `group_vars/all.yml`.
 
 ## Optional Variables
 
@@ -28,19 +27,19 @@ This contract defines what an operator must provide in `group_vars/all.yml` to r
 The playbook fails immediately if:
 - `nvr_longhorn_nfs_ip` is empty (NFS mount cannot be configured)
 - `nvr_longhorn_nfs_path` is empty (NFS mount path unknown)
-- `nvr_mqtt_client_cert` or `nvr_mqtt_client_key` is empty (MQTT connection will fail)
+- `frigate-mqtt-client` Certificate in the `frigate` namespace is not Ready within 120s (cert-manager not synced)
 - `/dev/hailo0` does not exist on the target host after driver installation
 
 ## Provisioning Order
 
 This playbook has a two-phase run requirement:
 
-**Phase A** (run first, before ArgoCD sync):
+**Phase A** (run first, before ArgoCD sync — installs host software only):
 ```bash
-ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml --tags host-setup,hailo,frigate-config
+ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml --tags host-setup,hailo
 ```
 
-**Phase B** (run after ArgoCD syncs `manifests/frigate/` and Longhorn NFS endpoint is available):
+**Phase B** (run after ArgoCD syncs `manifests/frigate/` — cert-manager must have issued `frigate-mqtt-client` — and Longhorn NFS endpoint is available):
 ```bash
 # 1. Obtain NFS endpoint
 kubectl get svc -n longhorn-system -l longhorn.io/pvc-name=frigate-clips
@@ -48,5 +47,5 @@ kubectl get svc -n longhorn-system -l longhorn.io/pvc-name=frigate-clips
 # 2. Set nvr_longhorn_nfs_ip and nvr_longhorn_nfs_path in group_vars/all.yml
 
 # 3. Complete provisioning
-ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml --tags nfs-mount,frigate-service
+ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml --tags frigate-config,nfs-mount,frigate-service
 ```

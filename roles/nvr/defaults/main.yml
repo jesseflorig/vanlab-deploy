@@ -1,6 +1,6 @@
 ---
 # Default variable values for the nvr role.
-# Secret values (nvr_frigate_admin_password, nvr_mqtt_*) must be set in
+# Secret values (nvr_frigate_admin_password) must be set in
 # group_vars/all.yml (gitignored). These defaults are non-secret operational
 # tuning parameters only.
 

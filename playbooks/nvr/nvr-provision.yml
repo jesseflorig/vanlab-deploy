@@ -4,20 +4,21 @@
 #
 # Two-phase execution is required:
 #
-#   Phase A (before ArgoCD sync + Longhorn NFS endpoint discovery):
+#   Phase A (before ArgoCD sync — installs host software only):
 #     ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml \
-#       --tags host-setup,hailo,frigate-config
+#       --tags host-setup,hailo
 #
-#   Phase B (after ArgoCD syncs manifests/frigate/ and nvr_longhorn_nfs_ip is set):
+#   Phase B (after ArgoCD syncs manifests/frigate/ and cert-manager issues
+#            the frigate-mqtt-client Certificate, and nvr_longhorn_nfs_ip is set):
 #     ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml \
-#       --tags nfs-mount,frigate-service
+#       --tags frigate-config,nfs-mount,frigate-service
 #
 #   Full idempotent re-run (both phases):
 #     ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml
 #
 # Credentials sourced from group_vars/all.yml (gitignored):
-#   nvr_frigate_admin_password, nvr_mqtt_client_cert, nvr_mqtt_client_key,
-#   nvr_mqtt_ca_cert, nvr_longhorn_nfs_ip, nvr_longhorn_nfs_path
+#   nvr_frigate_admin_password, nvr_longhorn_nfs_ip, nvr_longhorn_nfs_path
+# MQTT cert material is read from the cluster automatically (no manual PEM paste needed)
 #
 # See specs/041-nvr-frigate-hailo/quickstart.md for full runbook.
 
