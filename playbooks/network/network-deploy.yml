@@ -36,3 +36,36 @@
     - name: Display OPNsense system information
       ansible.builtin.debug:
         msg: "Connected to OPNsense — firmware: {{ opnsense_info.data.product_version | default('unknown') }}"
+
+    # ── NVR firewall rules ────────────────────────────────────────────────────
+    # Allow Frigate (10.1.10.11, edge VLAN) to reach the MQTT broker (cluster VLAN)
+    # over MQTTS. Required for Frigate to publish detection events.
+    - name: Allow NVR host to reach MQTT broker over MQTTS
+      oxlorg.opnsense.firewall_rule:
+        sequence: "200"
+        action: pass
+        interface: opt2  # edge VLAN (10.1.10.x) — adjust interface alias if different
+        direction: in
+        ipprotocol: inet
+        protocol: tcp
+        source_net: "10.1.10.11"
+        destination_net: "10.1.20.0/24"
+        destination_port: "8883"
+        description: "NVR Frigate → MQTT broker MQTTS"
+        state: present
+
+    # Allow Traefik ingress (cluster VLAN 10.1.20.x) to proxy to Frigate web UI
+    # on the NVR host. Required for frigate.fleet1.cloud to resolve correctly.
+    - name: Allow Traefik to proxy to Frigate web UI
+      oxlorg.opnsense.firewall_rule:
+        sequence: "201"
+        action: pass
+        interface: opt1  # cluster VLAN (10.1.20.x) — adjust interface alias if different
+        direction: in
+        ipprotocol: inet
+        protocol: tcp
+        source_net: "10.1.20.0/24"
+        destination_net: "10.1.10.11"
+        destination_port: "5000"
+        description: "Traefik → NVR Frigate web UI"
+        state: present

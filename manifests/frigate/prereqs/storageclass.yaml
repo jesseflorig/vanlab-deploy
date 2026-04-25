@@ -1,0 +1,16 @@
+---
+# sync wave 1 — StorageClass for Longhorn RWX volumes.
+# Separate from the default 'longhorn' StorageClass to enable NFS provisioner
+# parameters required for ReadWriteMany + external NFS mount.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: longhorn-rwx
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+provisioner: driver.longhorn.io
+allowVolumeExpansion: true
+parameters:
+  numberOfReplicas: "2"
+  fsType: "ext4"
+  nfsOptions: "vers=4.1,noresvport"

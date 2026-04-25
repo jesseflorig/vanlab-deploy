@@ -70,6 +70,11 @@ argocd_apps:
     path: manifests/home-automation/apps
     namespace: argocd
     revision: main
+  - name: frigate
+    repo: gitadmin/vanlab.git
+    path: manifests/frigate
+    namespace: frigate
+    revision: main
 
 # ── Home Automation Stack ─────────────────────────────────────────────────────
 # Used by: services-deploy.yml → mosquitto, influxdb, home-assistant, node-red roles
@@ -103,3 +108,54 @@ mosquitto_password_entry: "<USERNAME:HASHED_PASSWORD>"
 # Generate: node -e "require('bcryptjs').hash('yourpassword', 8, (e,h) => console.log(h))"
 # Or:       htpasswd -nbBC 8 "" yourpassword | tr -d ':\n'
 node_red_admin_password_bcrypt: "<BCRYPT_HASH>"
+
+# ── NVR Host (Frigate + Hailo-8) ──────────────────────────────────────────────
+# Used by: playbooks/nvr/nvr-provision.yml → nvr role
+#
+# Deployment order (first time):
+#   1. Fill nvr_frigate_admin_password, nvr_mqtt_*, nvr_cameras below
+#   2. ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml \
+#        --tags host-setup,hailo,frigate-config           (Phase A)
+#   3. Push branch → ArgoCD syncs manifests/frigate/
+#   4. Obtain Longhorn NFS endpoint:
+#        kubectl get svc -n longhorn-system -l longhorn.io/pvc-name=frigate-clips
+#      Set nvr_longhorn_nfs_ip and nvr_longhorn_nfs_path below
+#   5. ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml \
+#        --tags nfs-mount,frigate-service                 (Phase B)
+#
+# See specs/041-nvr-frigate-hailo/quickstart.md for full runbook.
+
+# Frigate web UI admin password
+nvr_frigate_admin_password: <NVR_FRIGATE_ADMIN_PASSWORD>
+
+# MQTT broker IP (internal, cluster VLAN — do not use public DNS)
+nvr_mqtt_broker_ip: <NVR_MQTT_BROKER_IP>  # e.g. 10.1.20.x
+
+# MQTT client certificate (PEM) — issued by internal CA for Frigate → broker auth
+nvr_mqtt_client_cert: |
+  <NVR_MQTT_CLIENT_CERT_PEM>
+
+# MQTT client private key (PEM) — never commit real values
+nvr_mqtt_client_key: |
+  <NVR_MQTT_CLIENT_KEY_PEM>
+
+# MQTT CA certificate (PEM) — for broker TLS verification
+nvr_mqtt_ca_cert: |
+  <NVR_MQTT_CA_CERT_PEM>
+
+# Longhorn NFS endpoint — populated AFTER ArgoCD syncs manifests/frigate/ (Phase B)
+# Get with: kubectl get svc -n longhorn-system -l longhorn.io/pvc-name=frigate-clips \
+#             -o jsonpath='{.items[0].spec.clusterIP}'
+nvr_longhorn_nfs_ip: ""
+# Get with: kubectl get pv $(kubectl get pvc frigate-clips -n frigate \
+#             -o jsonpath='{.spec.volumeName}') -o jsonpath='{.spec.nfs.path}'
+nvr_longhorn_nfs_path: ""
+
+# Camera list — zero or more entries; can be empty for initial provisioning
+nvr_cameras: []
+# Example:
+# nvr_cameras:
+#   - name: front-door
+#     rtsp_url: "rtsp://user:pass@10.1.30.x:554/stream1"
+#     width: 1920
+#     height: 1080

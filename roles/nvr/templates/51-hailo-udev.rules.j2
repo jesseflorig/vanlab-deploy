@@ -1,0 +1,3 @@
+# Hailo-8 PCIe device udev rules
+# Grants read/write access to the docker group so containers can access /dev/hailo0
+SUBSYSTEM=="misc", DEVPATH=="*hailo*", MODE="0660", GROUP="docker"

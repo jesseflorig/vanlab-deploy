@@ -1,0 +1,20 @@
+---
+# Traefik IngressRoute: routes frigate.fleet1.cloud to the NVR host via TLS.
+# TLS is terminated at Traefik using the cert-manager-issued certificate.
+# The backend (Frigate on 10.1.10.11:5000) receives plain HTTP internally.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: frigate
+  namespace: frigate
+spec:
+  entryPoints:
+    - websecure
+  tls:
+    secretName: frigate-fleet1-cloud-tls
+  routes:
+    - match: Host(`frigate.fleet1.cloud`)
+      kind: Rule
+      services:
+        - name: frigate
+          port: 5000

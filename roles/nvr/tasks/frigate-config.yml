@@ -1,0 +1,74 @@
+---
+# frigate-config.yml — Create config directories, deploy certificates, render config.
+
+# ── Directories ───────────────────────────────────────────────────────────────
+
+- name: Create Frigate config directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /var/lib/frigate/config
+    - /var/lib/frigate/config/certs
+    - /var/lib/frigate/config/model_cache
+    - /var/lib/frigate/media
+
+# ── MQTT certificates ─────────────────────────────────────────────────────────
+
+- name: Deploy MQTT CA certificate
+  ansible.builtin.copy:
+    content: "{{ nvr_mqtt_ca_cert }}"
+    dest: /var/lib/frigate/config/certs/ca.crt
+    owner: root
+    group: root
+    mode: "0644"
+  no_log: true
+  notify: restart-frigate
+
+- name: Deploy MQTT client certificate
+  ansible.builtin.copy:
+    content: "{{ nvr_mqtt_client_cert }}"
+    dest: /var/lib/frigate/config/certs/frigate-client.crt
+    owner: root
+    group: root
+    mode: "0644"
+  no_log: true
+  notify: restart-frigate
+
+- name: Deploy MQTT client private key
+  ansible.builtin.copy:
+    content: "{{ nvr_mqtt_client_key }}"
+    dest: /var/lib/frigate/config/certs/frigate-client.key
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: restart-frigate
+
+# ── Frigate config.yml ────────────────────────────────────────────────────────
+
+- name: Render Frigate config.yml
+  ansible.builtin.template:
+    src: frigate-config.yml.j2
+    dest: /var/lib/frigate/config/config.yml
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart-frigate
+
+# ── Home Assistant integration output ─────────────────────────────────────────
+
+- name: Render Home Assistant integration config block
+  ansible.builtin.template:
+    src: ha-frigate-config.txt.j2
+    dest: "{{ playbook_dir }}/../ha-frigate-config.txt"
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+
+- name: Notify operator about HA integration config
+  ansible.builtin.debug:
+    msg: "HA integration config written to ha-frigate-config.txt — apply to Home Assistant per quickstart.md Step 7"

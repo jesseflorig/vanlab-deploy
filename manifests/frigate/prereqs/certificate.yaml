@@ -1,0 +1,24 @@
+---
+# sync wave 2 — cert-manager Certificate for frigate.fleet1.cloud.
+# Uses the letsencrypt-dns ClusterIssuer (Cloudflare DNS-01 challenge).
+# TLS termination is handled by Traefik; the secret is referenced in ingressroute.yaml.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: frigate-tls
+  namespace: frigate
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  secretName: frigate-fleet1-cloud-tls
+  issuerRef:
+    name: letsencrypt-dns
+    kind: ClusterIssuer
+  dnsNames:
+    - frigate.fleet1.cloud
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  duration: 8760h
+  renewBefore: 720h

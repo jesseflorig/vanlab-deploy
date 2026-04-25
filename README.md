@@ -423,3 +423,50 @@ See `specs/016-home-automation-stack/quickstart.md` for VLAN-segmented IoT devic
 Mosquitto is LAN-only (K3s ServiceLB exposes it at `10.1.20.11:8883`). It is not routed through Traefik or the Cloudflare tunnel.
 
 The InfluxDB token and org ID are stored in the `home-assistant-influxdb` SealedSecret and injected into the Home Assistant container as environment variables (`INFLUXDB_TOKEN`, `INFLUXDB_ORG_ID`). The `influxdb2.yaml` package config reads them via `!env_var`.
+
+## NVR — Frigate + Hailo-8
+
+Dedicated NVR host at `10.1.10.11` running Frigate with Hailo-8 PCIe object detection. Event clips are stored on a Longhorn RWX volume (50Gi, NFS-mounted). The cluster Traefik ingress exposes `frigate.fleet1.cloud`. Detection events are published to the MQTT broker for Home Assistant consumption.
+
+See `specs/041-nvr-frigate-hailo/quickstart.md` for the full operator runbook.
+
+### First-time provisioning (two-phase)
+
+**Phase A** — provision host, install Hailo driver, render Frigate config:
+
+```bash
+ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml \
+  --tags host-setup,hailo,frigate-config
+```
+
+Then push the branch, merge via PR, and wait for ArgoCD to sync `manifests/frigate/`. Once the Longhorn share-manager pod is Running, obtain the NFS endpoint:
+
+```bash
+kubectl get svc -n longhorn-system -l longhorn.io/pvc-name=frigate-clips \
+  -o jsonpath='{.items[0].spec.clusterIP}'
+```
+
+Set `nvr_longhorn_nfs_ip` and `nvr_longhorn_nfs_path` in `group_vars/all.yml`.
+
+**Phase B** — configure NFS mount and start Frigate:
+
+```bash
+ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml \
+  --tags nfs-mount,frigate-service
+```
+
+### Re-provisioning
+
+Safe to run without tags at any time:
+
+```bash
+ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml
+```
+
+### Integration wiring
+
+| From | To | Protocol | Auth |
+|------|----|----------|------|
+| Frigate | Mosquitto | MQTTS (8883) | mTLS client cert (`nvr_mqtt_client_cert`) |
+| Traefik | Frigate | HTTP (5000) | n/a (Traefik terminates TLS externally) |
+| Home Assistant | Frigate | HTTPS (frigate.fleet1.cloud) | Frigate auth |

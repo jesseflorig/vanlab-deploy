@@ -1,0 +1,25 @@
+---
+- name: reload-udev
+  ansible.builtin.command: udevadm control --reload-rules
+  changed_when: false
+  notify: trigger-udev
+
+- name: trigger-udev
+  ansible.builtin.command: udevadm trigger
+  changed_when: false
+
+- name: systemd-daemon-reload
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: restart-sshd
+  ansible.builtin.systemd:
+    name: sshd
+    state: restarted
+
+- name: restart-frigate
+  ansible.builtin.systemd:
+    name: frigate
+    state: restarted
+  when: ansible_facts.services['frigate.service'] is defined and
+        ansible_facts.services['frigate.service']['state'] == 'running'

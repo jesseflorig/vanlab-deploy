@@ -1,0 +1,25 @@
+---
+# nvr role — tag-based task routing.
+# Phase A (run before ArgoCD sync): --tags host-setup,hailo,frigate-config
+# Phase B (run after NFS endpoint known): --tags nfs-mount,frigate-service
+# Full re-run (no --tags): all phases execute in order
+
+- name: Host setup (OS hardening, Docker)
+  ansible.builtin.include_tasks: host-setup.yml
+  tags: host-setup
+
+- name: Hailo-8 driver install and verification
+  ansible.builtin.include_tasks: hailo.yml
+  tags: hailo
+
+- name: Frigate configuration and certificates
+  ansible.builtin.include_tasks: frigate-config.yml
+  tags: frigate-config
+
+- name: Longhorn NFS clips mount
+  ansible.builtin.include_tasks: nfs-mount.yml
+  tags: nfs-mount
+
+- name: Frigate systemd service
+  ansible.builtin.include_tasks: frigate-service.yml
+  tags: frigate-service
