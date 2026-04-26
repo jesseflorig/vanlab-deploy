@@ -41,31 +41,50 @@
     # Allow Frigate (10.1.10.11, edge VLAN) to reach the MQTT broker (cluster VLAN)
     # over MQTTS. Required for Frigate to publish detection events.
     - name: Allow NVR host to reach MQTT broker over MQTTS
-      oxlorg.opnsense.firewall_rule:
-        sequence: "200"
+      oxlorg.opnsense.rule:
+        sequence: 200
         action: pass
-        interface: opt2  # edge VLAN (10.1.10.x) — adjust interface alias if different
+        interface: [opt2]  # edge VLAN (10.1.10.x) — adjust interface alias if different
         direction: in
-        ipprotocol: inet
+        ip_protocol: inet
         protocol: tcp
         source_net: "10.1.10.11"
         destination_net: "10.1.20.0/24"
         destination_port: "8883"
         description: "NVR Frigate → MQTT broker MQTTS"
+        match_fields: [description]
         state: present
 
     # Allow Traefik ingress (cluster VLAN 10.1.20.x) to proxy to Frigate web UI
     # on the NVR host. Required for frigate.fleet1.cloud to resolve correctly.
     - name: Allow Traefik to proxy to Frigate web UI
-      oxlorg.opnsense.firewall_rule:
-        sequence: "201"
+      oxlorg.opnsense.rule:
+        sequence: 201
         action: pass
-        interface: opt1  # cluster VLAN (10.1.20.x) — adjust interface alias if different
+        interface: [opt1]  # cluster VLAN (10.1.20.x) — adjust interface alias if different
         direction: in
-        ipprotocol: inet
+        ip_protocol: inet
         protocol: tcp
         source_net: "10.1.20.0/24"
         destination_net: "10.1.10.11"
         destination_port: "5000"
         description: "Traefik → NVR Frigate web UI"
+        match_fields: [description]
+        state: present
+
+    # Allow NVR host to mount Longhorn NFS share (event clips PVC exported via
+    # share-manager LoadBalancer service on cluster VLAN nodes).
+    - name: Allow NVR host to reach Longhorn NFS share
+      oxlorg.opnsense.rule:
+        sequence: 202
+        action: pass
+        interface: [opt2]  # edge VLAN (10.1.10.x)
+        direction: in
+        ip_protocol: inet
+        protocol: tcp
+        source_net: "10.1.10.11"
+        destination_net: "10.1.20.0/24"
+        destination_port: "2049"
+        description: "NVR Frigate → Longhorn NFS clips share"
+        match_fields: [description]
         state: present
