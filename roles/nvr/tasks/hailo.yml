@@ -43,11 +43,12 @@
     mode: "0644"
   loop: "{{ hailo_debs.files }}"
 
-- name: Install Hailo .deb packages
-  ansible.builtin.apt:
-    deb: "/tmp/{{ item.path | basename }}"
-    state: present
+- name: Force-install Hailo .deb packages (allows downgrade)
+  ansible.builtin.command:
+    cmd: "dpkg -i --force-downgrade /tmp/{{ item.path | basename }}"
   loop: "{{ hailo_debs.files }}"
+  register: dpkg_result
+  changed_when: "'already installed' not in dpkg_result.stdout"
   notify: reload-udev
 
 # ── udev rules ────────────────────────────────────────────────────────────────
