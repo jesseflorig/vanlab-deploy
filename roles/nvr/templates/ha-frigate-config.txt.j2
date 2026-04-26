@@ -27,7 +27,7 @@ frigate:
 {% if nvr_cameras | length > 0 %}
 # The following cameras will appear as entities in Home Assistant:
 {% for cam in nvr_cameras %}
-#   - camera.{{ cam.name }} ({{ cam.width }}×{{ cam.height }})
+#   - camera.{{ cam.name }}
 #     Snapshot:  http://10.1.10.11:{{ nvr_frigate_port }}/api/{{ cam.name }}/latest.jpg
 #     Stream:    http://10.1.10.11:{{ nvr_frigate_port }}/api/{{ cam.name }}/stream.m3u8
 #     Events:    {{ nvr_mqtt_topic_prefix }}/{{ cam.name }}/events
