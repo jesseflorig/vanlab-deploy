@@ -19,6 +19,9 @@ nvr_cameras: []
 nvr_longhorn_nfs_ip: ""
 nvr_longhorn_nfs_path: ""
 
+# Hailo driver version — must match the .deb files staged in roles/nvr/files/hailo/
+hailo_pcie_version: "4.21.0"
+
 # Frigate container image
 nvr_frigate_image: "ghcr.io/blakeblackshear/frigate:stable"
 
