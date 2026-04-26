@@ -1,6 +1,6 @@
 # vanlab Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-04-25
+Auto-generated from all feature plans. Last updated: 2026-04-26
 
 ## Active Technologies
 - YAML (Ansible 2.x) — existing project conventions (002-project-reorganization)
@@ -21,6 +21,8 @@ Auto-generated from all feature plans. Last updated: 2026-04-25
 - N/A — no persistent state; playbook is stateless (040-rack-shutdown-script)
 - YAML (Ansible 2.x) for host provisioning; YAML (Kubernetes manifests) for cluster-side resources + Ansible, Docker (on NVR host), Hailo PCIe driver (`h10-hailort-pcie-driver` + `hailo-all`), Frigate (`ghcr.io/blakeblackshear/frigate:stable`), Longhorn v1.11.1 (existing), Traefik (existing), cert-manager (existing), ArgoCD (existing) (041-nvr-frigate-hailo)
 - Local NVMe at `/var/lib/frigate/media` (continuous recordings); Longhorn RWX PVC `frigate-clips` (50Gi) NFS-mounted at `/mnt/frigate-clips` (event clips) (041-nvr-frigate-hailo)
+- YAML (Ansible 2.x) + Ansible, OPNsense REST API (`oxlorg.opnsense`), Docker (Frigate on NVR host), Jinja2 (049-frigate-cameras)
+- Local NVMe at `/var/lib/frigate/media` (continuous recordings, storage-managed); Longhorn RWX NFS PVC `frigate-clips` 50Gi (event clips, 30-day retention) (049-frigate-cameras)
 
 - YAML (Ansible 2.x) — follows existing project conventions + `smartmontools` (apt) — installed idempotently by the playbook as a (001-node-disk-health)
 
@@ -40,9 +42,9 @@ tests/
 YAML (Ansible 2.x) — follows existing project conventions: Follow standard conventions
 
 ## Recent Changes
+- 049-frigate-cameras: Added YAML (Ansible 2.x) + Ansible, OPNsense REST API (`oxlorg.opnsense`), Docker (Frigate on NVR host), Jinja2
 - 041-nvr-frigate-hailo: Added YAML (Ansible 2.x) for host provisioning; YAML (Kubernetes manifests) for cluster-side resources + Ansible, Docker (on NVR host), Hailo PCIe driver (`h10-hailort-pcie-driver` + `hailo-all`), Frigate (`ghcr.io/blakeblackshear/frigate:stable`), Longhorn v1.11.1 (existing), Traefik (existing), cert-manager (existing), ArgoCD (existing)
 - 040-rack-shutdown-script: Added YAML (Ansible 2.x) — existing project conventions + Ansible, kubectl (delegated to localhost for Longhorn pre-flight check), SSH
-- 038-opnsense-metrics: Added YAML (Kubernetes manifests + Ansible 2.x)
 
 
 <!-- MANUAL ADDITIONS START -->

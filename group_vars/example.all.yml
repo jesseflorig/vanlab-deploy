@@ -142,11 +142,26 @@ nvr_longhorn_nfs_ip: ""
 #             -o jsonpath='{.spec.volumeName}') -o jsonpath='{.spec.nfs.path}'
 nvr_longhorn_nfs_path: ""
 
+# RTSP credentials — shared across all cameras (vault-encrypt nvr_camera_rtsp_pass)
+# To encrypt: ansible-vault encrypt_string '<password>' --name 'nvr_camera_rtsp_pass'
+nvr_camera_rtsp_user: <NVR_CAMERA_RTSP_USER>
+nvr_camera_rtsp_pass: <NVR_CAMERA_RTSP_PASS>  # ansible-vault encrypted
+
 # Camera list — zero or more entries; can be empty for initial provisioning
+# Dual-stream: rtsp_main_url → record role (high-res), rtsp_sub_url → detect role (low-res)
+# EmpireTech/Dahua path pattern: subtype=0 (main 2688x1520), subtype=1 (sub 640x480)
 nvr_cameras: []
-# Example:
+# Example (EmpireTech IPC-T54IR-AS / Dahua OEM):
 # nvr_cameras:
-#   - name: front-door
-#     rtsp_url: "rtsp://user:pass@10.1.30.x:554/stream1"
-#     width: 1920
-#     height: 1080
+#   - name: cam-01
+#     rtsp_main_url: "rtsp://{{ nvr_camera_rtsp_user }}:{{ nvr_camera_rtsp_pass }}@10.1.40.11:554/cam/realmonitor?channel=1&subtype=0"
+#     rtsp_sub_url:  "rtsp://{{ nvr_camera_rtsp_user }}:{{ nvr_camera_rtsp_pass }}@10.1.40.11:554/cam/realmonitor?channel=1&subtype=1"
+#   - name: cam-02
+#     rtsp_main_url: "rtsp://{{ nvr_camera_rtsp_user }}:{{ nvr_camera_rtsp_pass }}@10.1.40.12:554/cam/realmonitor?channel=1&subtype=0"
+#     rtsp_sub_url:  "rtsp://{{ nvr_camera_rtsp_user }}:{{ nvr_camera_rtsp_pass }}@10.1.40.12:554/cam/realmonitor?channel=1&subtype=1"
+#   - name: cam-03
+#     rtsp_main_url: "rtsp://{{ nvr_camera_rtsp_user }}:{{ nvr_camera_rtsp_pass }}@10.1.40.13:554/cam/realmonitor?channel=1&subtype=0"
+#     rtsp_sub_url:  "rtsp://{{ nvr_camera_rtsp_user }}:{{ nvr_camera_rtsp_pass }}@10.1.40.13:554/cam/realmonitor?channel=1&subtype=1"
+#   - name: cam-04
+#     rtsp_main_url: "rtsp://{{ nvr_camera_rtsp_user }}:{{ nvr_camera_rtsp_pass }}@10.1.40.14:554/cam/realmonitor?channel=1&subtype=0"
+#     rtsp_sub_url:  "rtsp://{{ nvr_camera_rtsp_user }}:{{ nvr_camera_rtsp_pass }}@10.1.40.14:554/cam/realmonitor?channel=1&subtype=1"
