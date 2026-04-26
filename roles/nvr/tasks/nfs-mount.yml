@@ -46,15 +46,33 @@
     mode: "0644"
   notify: systemd-daemon-reload
 
+- name: Deploy Longhorn NFS systemd automount unit
+  ansible.builtin.template:
+    src: frigate-clips.automount.j2
+    dest: "/etc/systemd/system/mnt-frigate\\x2dclips.automount"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: systemd-daemon-reload
+
 - name: Flush handlers to reload systemd
   ansible.builtin.meta: flush_handlers
 
-- name: Enable and start Longhorn NFS mount
+- name: Enable mount unit (activated on demand by automount)
   ansible.builtin.systemd:
     name: "mnt-frigate\\x2dclips.mount"
-    # Ansible passes \\x2d → systemd sees \x2d (correct unit name)
+    enabled: true
+
+- name: Enable and start automount unit
+  ansible.builtin.systemd:
+    name: "mnt-frigate\\x2dclips.automount"
     enabled: true
     state: started
+
+- name: Trigger automount by accessing the mount point
+  ansible.builtin.command: ls /mnt/frigate-clips
+  changed_when: false
+  failed_when: false
 
 - name: Verify clips mount is active
   ansible.builtin.command: mountpoint -q /mnt/frigate-clips

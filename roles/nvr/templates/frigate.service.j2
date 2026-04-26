@@ -1,8 +1,9 @@
 [Unit]
 Description=Frigate NVR (Hailo-8 accelerated)
 Documentation=https://docs.frigate.video
-After=docker.service network-online.target mnt-frigate\x2dclips.mount
-Requires=docker.service mnt-frigate\x2dclips.mount
+After=docker.service network-online.target mnt-frigate\x2dclips.automount
+Requires=docker.service
+Wants=mnt-frigate\x2dclips.automount
 
 [Service]
 Restart=always
