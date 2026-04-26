@@ -37,7 +37,10 @@
 - name: Deploy Longhorn NFS systemd mount unit
   ansible.builtin.template:
     src: frigate-clips.mount.j2
-    dest: /etc/systemd/system/mnt-frigate-clips.mount
+    # systemd escapes hyphens in path components as \x2d:
+    # /mnt/frigate-clips → mnt-frigate\x2dclips.mount
+    dest: "/etc/systemd/system/mnt-frigate\\x2dclips.mount"
+    # Note: dest uses \\x2d so Ansible writes a literal \x2d to the filesystem
     owner: root
     group: root
     mode: "0644"
@@ -48,7 +51,8 @@
 
 - name: Enable and start Longhorn NFS mount
   ansible.builtin.systemd:
-    name: mnt-frigate-clips.mount
+    name: "mnt-frigate\\x2dclips.mount"
+    # Ansible passes \\x2d → systemd sees \x2d (correct unit name)
     enabled: true
     state: started
 

@@ -13,11 +13,13 @@ mqtt:
 
 detectors:
   hailo8:
-    type: hailo8
+    type: hailo8l
     device: PCIe
 
 model:
-  path: /config/model_cache/hailo/yolov8s.hef
+  # path is intentionally omitted — Frigate uses its bundled default Hailo model.
+  # To use a custom model, set nvr_frigate_model_path in group_vars/all.yml and
+  # uncomment: path: "{{ nvr_frigate_model_path }}"
   input_tensor: nhwc
   input_pixel_format: rgb
   model_type: yolo-generic
