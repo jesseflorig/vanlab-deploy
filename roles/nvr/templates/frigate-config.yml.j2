@@ -18,8 +18,7 @@ detectors:
 
 model:
   # path is intentionally omitted — Frigate uses its bundled default Hailo model.
-  # To use a custom model, set nvr_frigate_model_path in group_vars/all.yml and
-  # uncomment: path: "{{ nvr_frigate_model_path }}"
+  # To use a custom model, add path: /config/model_cache/hailo/yolov8s.hef
   input_tensor: nhwc
   input_pixel_format: rgb
   model_type: yolo-generic
