@@ -1,0 +1,11 @@
+[Unit]
+Description=Longhorn NFS Clips Volume for Frigate (automount)
+After=network-online.target
+Wants=network-online.target
+
+[Automount]
+Where=/mnt/frigate-clips
+TimeoutIdleSec=0
+
+[Install]
+WantedBy=multi-user.target
