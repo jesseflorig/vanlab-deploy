@@ -43,13 +43,38 @@
     mode: "0644"
   loop: "{{ hailo_debs.files }}"
 
-- name: Force-install Hailo .deb packages (allows downgrade)
+- name: Force-install HailoRT runtime .deb
   ansible.builtin.command:
-    cmd: "dpkg -i --force-downgrade /tmp/{{ item.path | basename }}"
-  loop: "{{ hailo_debs.files }}"
-  register: dpkg_result
-  changed_when: "'already installed' not in dpkg_result.stdout"
+    cmd: "dpkg -i --force-downgrade /tmp/hailort_{{ hailo_pcie_version }}_amd64.deb"
+  register: dpkg_hailort
+  changed_when: "'already installed' not in dpkg_hailort.stdout"
   notify: reload-udev
+
+- name: Force-install HailoRT PCIe driver .deb (pre-install Secure Boot check may fail; DKMS still runs)
+  ansible.builtin.command:
+    cmd: "dpkg -i --force-downgrade /tmp/hailort-pcie-driver_{{ hailo_pcie_version }}_all.deb"
+  register: dpkg_pcie
+  changed_when: "'already installed' not in dpkg_pcie.stdout"
+  failed_when: false
+  notify: reload-udev
+
+# ── Firmware extraction (Secure Boot workaround) ─────────────────────────────
+# The hailort-pcie-driver pre-install script fails when Secure Boot is enabled,
+# which prevents dpkg from extracting the firmware file. Extract it directly
+# from the deb so the module can load on every boot.
+
+- name: Extract Hailo firmware from deb (Secure Boot pre-install workaround)
+  ansible.builtin.shell: |
+    dpkg-deb --fsys-tarfile /tmp/hailort-pcie-driver_{{ hailo_pcie_version }}_all.deb \
+      | tar -C / -x './lib/firmware/hailo/hailo8_fw.{{ hailo_pcie_version }}.bin'
+  args:
+    creates: "/lib/firmware/hailo/hailo8_fw.{{ hailo_pcie_version }}.bin"
+
+- name: Create hailo8_fw.bin symlink
+  ansible.builtin.file:
+    src: "/lib/firmware/hailo/hailo8_fw.{{ hailo_pcie_version }}.bin"
+    dest: /lib/firmware/hailo/hailo8_fw.bin
+    state: link
 
 # ── udev rules ────────────────────────────────────────────────────────────────
 
