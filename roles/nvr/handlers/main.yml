@@ -21,5 +21,3 @@
   ansible.builtin.systemd:
     name: frigate
     state: restarted
-  when: ansible_facts.services['frigate.service'] is defined and
-        ansible_facts.services['frigate.service']['state'] == 'running'

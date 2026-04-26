@@ -4,9 +4,12 @@
 # Runs on localhost; connects to OPNsense at {{ opnsense_firewall }} over HTTPS.
 #
 # Credentials sourced from group_vars/all.yml (gitignored):
-#   opnsense_api_key, opnsense_api_secret
-# Non-secret connection vars in group_vars/network.yml:
-#   opnsense_firewall, opnsense_api_verify_ssl
+#   opnsense_api_key, opnsense_api_secret, opnsense_firewall, opnsense_api_verify_ssl
+#
+# Interface map (discovered from API):
+#   opt1 = VLAN10_Mgmt  (10.1.10.x) — NVR host, management devices
+#   opt2 = VLAN20_Cluster (10.1.20.x) — K3s cluster nodes
+#   opt3 = VLAN30_IoT, opt4 = VLAN40_Camera, opt5 = VLAN50_Trusted
 #
 # Usage:
 #   ansible-playbook -i hosts.ini playbooks/network/network-deploy.yml --check
@@ -14,11 +17,47 @@
 #
 # Prerequisites:
 #   ansible-galaxy collection install -r requirements.yml
+#   OPNsense: os-firewall plugin installed, API user has Firewall: Rules privilege
 
 - name: Configure OPNsense
   hosts: localhost
   connection: local
   gather_facts: false
+  vars:
+    opnsense_api_base: "https://{{ opnsense_firewall }}/api"
+    opnsense_auth: "{{ opnsense_api_key }}:{{ opnsense_api_secret }}"
+    # NVR firewall rules — idempotency key is the description field
+    nvr_rules:
+      - seq: 200
+        action: pass
+        interface: opt1   # VLAN10_Mgmt — NVR host is 10.1.10.11
+        direction: in
+        ipprotocol: inet
+        protocol: TCP
+        source_net: "10.1.10.11"
+        destination_net: "10.1.20.0/24"
+        destination_port: "8883"
+        description: "NVR Frigate → MQTT broker MQTTS"
+      - seq: 201
+        action: pass
+        interface: opt2   # VLAN20_Cluster — Traefik runs on cluster nodes
+        direction: in
+        ipprotocol: inet
+        protocol: TCP
+        source_net: "10.1.20.0/24"
+        destination_net: "10.1.10.11"
+        destination_port: "5000"
+        description: "Traefik → NVR Frigate web UI"
+      - seq: 202
+        action: pass
+        interface: opt1   # VLAN10_Mgmt — NVR host is 10.1.10.11
+        direction: in
+        ipprotocol: inet
+        protocol: TCP
+        source_net: "10.1.10.11"
+        destination_net: "10.1.20.0/24"
+        destination_port: "2049"
+        description: "NVR Frigate → Longhorn NFS clips share"
   module_defaults:
     group/oxlorg.opnsense.all:
       firewall: "{{ opnsense_firewall }}"
@@ -38,53 +77,80 @@
         msg: "Connected to OPNsense — firmware: {{ opnsense_info.data.product_version | default('unknown') }}"
 
     # ── NVR firewall rules ────────────────────────────────────────────────────
-    # Allow Frigate (10.1.10.11, edge VLAN) to reach the MQTT broker (cluster VLAN)
-    # over MQTTS. Required for Frigate to publish detection events.
-    - name: Allow NVR host to reach MQTT broker over MQTTS
-      oxlorg.opnsense.rule:
-        sequence: 200
-        action: pass
-        interface: [opt2]  # edge VLAN (10.1.10.x) — adjust interface alias if different
-        direction: in
-        ip_protocol: inet
-        protocol: tcp
-        source_net: "10.1.10.11"
-        destination_net: "10.1.20.0/24"
-        destination_port: "8883"
-        description: "NVR Frigate → MQTT broker MQTTS"
-        match_fields: [description]
-        state: present
+    # Using ansible.builtin.uri directly — the oxlorg.opnsense.rule module has
+    # a parsing bug (interface_invert field) that breaks after the first rule is
+    # created. Direct API calls are more reliable here.
+    - name: Fetch existing firewall rules
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/firewall/filter/get"
+        method: GET
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        return_content: true
+      register: existing_rules_raw
 
-    # Allow Traefik ingress (cluster VLAN 10.1.20.x) to proxy to Frigate web UI
-    # on the NVR host. Required for frigate.fleet1.cloud to resolve correctly.
-    - name: Allow Traefik to proxy to Frigate web UI
-      oxlorg.opnsense.rule:
-        sequence: 201
-        action: pass
-        interface: [opt1]  # cluster VLAN (10.1.20.x) — adjust interface alias if different
-        direction: in
-        ip_protocol: inet
-        protocol: tcp
-        source_net: "10.1.20.0/24"
-        destination_net: "10.1.10.11"
-        destination_port: "5000"
-        description: "Traefik → NVR Frigate web UI"
-        match_fields: [description]
-        state: present
+    - name: Normalize rules response to dict (API returns [] when empty)
+      ansible.builtin.set_fact:
+        rule_uuid_by_desc: {}
+        existing_rules_dict: >-
+          {{ existing_rules_raw.json.filter.rules.rule
+             if (existing_rules_raw.json.filter.rules.rule | type_debug) == 'dict'
+             else {} }}
 
-    # Allow NVR host to mount Longhorn NFS share (event clips PVC exported via
-    # share-manager LoadBalancer service on cluster VLAN nodes).
-    - name: Allow NVR host to reach Longhorn NFS share
-      oxlorg.opnsense.rule:
-        sequence: 202
-        action: pass
-        interface: [opt2]  # edge VLAN (10.1.10.x)
-        direction: in
-        ip_protocol: inet
-        protocol: tcp
-        source_net: "10.1.10.11"
-        destination_net: "10.1.20.0/24"
-        destination_port: "2049"
-        description: "NVR Frigate → Longhorn NFS clips share"
-        match_fields: [description]
-        state: present
+    - name: Build description→uuid map from existing rules
+      ansible.builtin.set_fact:
+        rule_uuid_by_desc: "{{ rule_uuid_by_desc | combine({item.value.description: item.key}) }}"
+      loop: "{{ existing_rules_dict | dict2items }}"
+      loop_control:
+        label: "{{ item.value.description | default('(no description)') }}"
+
+    - name: Apply NVR firewall rules
+      ansible.builtin.uri:
+        url: >-
+          {{ opnsense_api_base }}/firewall/filter/{{
+            'set_rule/' + rule_uuid_by_desc[item.description]
+            if item.description in rule_uuid_by_desc
+            else 'add_rule'
+          }}
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body:
+          rule:
+            sequence: "{{ item.seq }}"
+            action: "{{ item.action }}"
+            interface: "{{ item.interface }}"
+            direction: "{{ item.direction }}"
+            ipprotocol: "{{ item.ipprotocol }}"
+            protocol: "{{ item.protocol }}"
+            source_net: "{{ item.source_net }}"
+            destination_net: "{{ item.destination_net }}"
+            destination_port: "{{ item.destination_port }}"
+            description: "{{ item.description }}"
+        return_content: true
+        status_code: [200]
+      register: rule_result
+      changed_when: rule_result.json.result in ['saved', 'added']
+      loop: "{{ nvr_rules }}"
+      loop_control:
+        label: "{{ item.description }}"
+
+    - name: Apply firewall filter changes
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/firewall/filter/apply"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body: {}
+        return_content: true
+        status_code: [200]
+      register: apply_result
+      changed_when: apply_result.json.status | default('') == 'ok'
