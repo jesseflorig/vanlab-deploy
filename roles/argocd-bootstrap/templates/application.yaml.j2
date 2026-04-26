@@ -11,6 +11,10 @@ spec:
     repoURL: "https://{{ gitea_hostname }}:{{ gitea_internal_port }}/{{ item.repo }}"
     targetRevision: "{{ item.revision | default('main') }}"
     path: "{{ item.path | default('.') }}"
+{% if item.recurse | default(false) %}
+    directory:
+      recurse: true
+{% endif %}
   destination:
     server: https://kubernetes.default.svc
     namespace: "{{ item.namespace }}"
