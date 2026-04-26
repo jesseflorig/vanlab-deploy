@@ -1,5 +1,6 @@
 .claude
 group_vars/all.yml
+.vault_pass
 *.retry
 *.log
 .DS_Store
