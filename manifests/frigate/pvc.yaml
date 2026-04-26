@@ -16,6 +16,7 @@ metadata:
   namespace: frigate
   annotations:
     longhorn.external.share: "true"
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   accessModes:
     - ReadWriteMany
