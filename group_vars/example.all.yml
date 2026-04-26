@@ -75,6 +75,7 @@ argocd_apps:
     path: manifests/frigate
     namespace: frigate
     revision: main
+    recurse: true
 
 # ── Home Automation Stack ─────────────────────────────────────────────────────
 # Used by: services-deploy.yml → mosquitto, influxdb, home-assistant, node-red roles
