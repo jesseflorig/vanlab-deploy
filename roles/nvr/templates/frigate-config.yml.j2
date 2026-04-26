@@ -41,19 +41,23 @@ cameras:
   {{ cam.name }}:
     ffmpeg:
       inputs:
-        - path: "{{ cam.rtsp_url }}"
+        - path: "{{ cam.rtsp_main_url }}"
+          roles:
+            - record
+        - path: "{{ cam.rtsp_sub_url }}"
           roles:
             - detect
-            - record
     detect:
       enabled: true
-      width: {{ cam.width }}
-      height: {{ cam.height }}
+      width: 640
+      height: 480
       fps: 5
     objects:
       track:
         - person
         - car
+        - truck
+        - bicycle
         - dog
         - cat
     record:
