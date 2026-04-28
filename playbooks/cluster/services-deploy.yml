@@ -12,6 +12,8 @@
     - helm
     - cert-manager
     - longhorn
+    - role: pki
+      tags: [pki]
     - role: kube-prometheus-stack
       tags: [monitoring]
     - role: loki

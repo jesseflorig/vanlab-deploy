@@ -23,6 +23,10 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+    - host: node-red.fleet1.lan
+      paths:
+        - path: /
+          pathType: Prefix
 
 env:
   - name: NODE_RED_CREDENTIAL_SECRET

@@ -38,6 +38,10 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+    - host: "gitea.fleet1.lan"
+      paths:
+        - path: /
+          pathType: Prefix
 
 service:
   http:

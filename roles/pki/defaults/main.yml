@@ -1,0 +1,19 @@
+---
+# roles/pki/defaults/main.yml
+# Internal PKI for fleet1.lan — CA chain and wildcard TLS cert.
+# No secrets here; CA private key is managed exclusively by cert-manager in-cluster.
+
+pki_ca_namespace: cert-manager
+pki_cert_namespace: traefik
+pki_ca_name: fleet1-lan-ca
+pki_ca_secret_name: fleet1-lan-ca-secret
+pki_wildcard_name: fleet1-lan-wildcard-tls
+pki_wildcard_secret_name: fleet1-lan-wildcard-tls
+
+# CA is long-lived; rotation is a deliberate manual operation.
+pki_ca_duration: 87600h       # 10 years
+pki_ca_renew_before: 720h     # 30 days
+
+# Wildcard cert matches fleet1.cloud cert duration convention.
+pki_wildcard_duration: 8760h  # 1 year
+pki_wildcard_renew_before: 720h

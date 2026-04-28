@@ -1,0 +1,22 @@
+---
+# *.fleet1.lan wildcard TLS certificate — issued by fleet1-lan-ca ClusterIssuer.
+# Stored in the traefik namespace so Traefik can reference it directly.
+# Traefik selects this cert for *.fleet1.lan connections via SNI (see TLSStore).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: "{{ pki_wildcard_name }}"
+  namespace: "{{ pki_cert_namespace }}"
+spec:
+  secretName: "{{ pki_wildcard_secret_name }}"
+  dnsNames:
+    - "*.fleet1.lan"
+  issuerRef:
+    name: "{{ pki_ca_name }}"
+    kind: ClusterIssuer
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  duration: "{{ pki_wildcard_duration }}"
+  renewBefore: "{{ pki_wildcard_renew_before }}"

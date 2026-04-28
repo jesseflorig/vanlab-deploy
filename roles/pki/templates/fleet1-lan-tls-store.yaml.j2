@@ -1,0 +1,16 @@
+---
+# Traefik TLSStore — adds fleet1-lan-wildcard-tls to the cluster-wide cert pool.
+# Traefik uses SNI to select the correct cert per connection:
+#   *.fleet1.lan  → fleet1-lan-wildcard-tls  (this entry)
+#   *.fleet1.cloud → fleet1-cloud-tls        (defaultCertificate, set via Helm values)
+# The defaultCertificate is left unchanged; this is an additive certificates entry.
+apiVersion: traefik.io/v1alpha1
+kind: TLSStore
+metadata:
+  name: default
+  namespace: traefik
+spec:
+  defaultCertificate:
+    secretName: fleet1-cloud-tls
+  certificates:
+    - secretName: "{{ pki_wildcard_secret_name }}"

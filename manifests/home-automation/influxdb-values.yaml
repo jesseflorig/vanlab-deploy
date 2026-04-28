@@ -23,6 +23,9 @@ ingress:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
   hostname: influxdb.fleet1.cloud
+  extraHosts:
+    - name: influxdb.fleet1.lan
+      path: /
 
 service:
   type: ClusterIP

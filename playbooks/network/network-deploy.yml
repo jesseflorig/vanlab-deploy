@@ -164,3 +164,141 @@
         status_code: [200]
       register: apply_result
       changed_when: apply_result.json.status | default('') == 'ok'
+
+    # ── fleet1.lan Unbound DNS override ──────────────────────────────────────
+    # Wildcard host override: *.fleet1.lan → 10.1.20.11 (Traefik NodePort host)
+    # Idempotency: search existing overrides by domain+hostname before creating.
+    - name: Fetch existing Unbound host overrides
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/unbound/settings/searchHostOverride"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body:
+          current: 1
+          rowCount: 100
+          searchPhrase: ""
+        return_content: true
+        status_code: [200]
+      register: existing_unbound_overrides
+
+    - name: Check if fleet1.lan wildcard override already exists
+      ansible.builtin.set_fact:
+        fleet1_lan_override_exists: >-
+          {{ existing_unbound_overrides.json.rows
+             | selectattr('hostname', 'equalto', '*')
+             | selectattr('domain', 'equalto', 'fleet1.lan')
+             | list | length > 0 }}
+
+    - name: Create fleet1.lan wildcard host override
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/unbound/settings/addHostOverride"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body:
+          host:
+            enabled: "1"
+            hostname: "*"
+            domain: "fleet1.lan"
+            rr: "A"
+            server: "10.1.20.11"
+            description: "fleet1.lan wildcard → Traefik node1 (DNAT 443→30443 via OPNsense)"
+        return_content: true
+        status_code: [200]
+      register: unbound_create_result
+      when: not fleet1_lan_override_exists
+      changed_when: unbound_create_result.json.result | default('') == 'saved'
+
+    - name: Apply Unbound configuration
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/unbound/service/reconfigure"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body: {}
+        return_content: true
+        status_code: [200]
+      register: unbound_apply_result
+      when: not fleet1_lan_override_exists
+      changed_when: unbound_apply_result.json.status | default('') == 'ok'
+
+    # --- Destination NAT: fleet1.lan HTTPS → Traefik NodePort ---
+    # Requires OPNsense 26.1+; API path is d_nat (not dnat)
+    - name: Fetch existing Destination NAT rules
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/firewall/d_nat/searchRule"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body: {}
+        return_content: true
+        status_code: [200]
+      register: existing_dnat_rules
+
+    - name: Check if fleet1.lan HTTPS DNAT rule already exists
+      ansible.builtin.set_fact:
+        fleet1_lan_dnat_exists: >-
+          {{ existing_dnat_rules.json.rows
+             | selectattr('descr', 'equalto', 'fleet1.lan HTTPS → Traefik NodePort')
+             | list | length > 0 }}
+
+    - name: Create fleet1.lan HTTPS → Traefik NodePort DNAT rule
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/firewall/d_nat/addRule"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body:
+          rule:
+            disabled: "0"
+            nordr: "0"
+            interface: lan
+            ipprotocol: inet
+            protocol: tcp
+            destination:
+              network: ""
+              address: "10.1.20.11"
+              port: "443"
+              not: "0"
+            target: "10.1.20.11"
+            local-port: "30443"
+            descr: "fleet1.lan HTTPS → Traefik NodePort"
+            log: "0"
+            nosync: "0"
+        return_content: true
+        status_code: [200]
+      register: dnat_create_result
+      when: not fleet1_lan_dnat_exists
+      changed_when: dnat_create_result.json.result | default('') == 'saved'
+
+    - name: Apply Destination NAT configuration
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/firewall/d_nat/apply"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body: {}
+        return_content: true
+        status_code: [200]
+      register: dnat_apply_result
+      when: not fleet1_lan_dnat_exists
+      changed_when: dnat_apply_result.json.status | default('') == 'ok'

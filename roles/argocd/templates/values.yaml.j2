@@ -19,6 +19,9 @@ server:
       traefik.ingress.kubernetes.io/router.tls: "true"
       traefik.ingress.kubernetes.io/service.serversscheme: https
       traefik.ingress.kubernetes.io/service.serverstransport: argocd-skip-verify@kubernetescrd
+    extraHosts:
+      - name: "argocd.fleet1.lan"
+        path: /
 
 dex:
   enabled: false

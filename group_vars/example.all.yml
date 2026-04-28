@@ -165,3 +165,13 @@ nvr_cameras: []
 #   - name: cam-04
 #     rtsp_main_url: "rtsp://{{ nvr_camera_rtsp_user }}:{{ nvr_camera_rtsp_pass }}@10.1.40.14:554/cam/realmonitor?channel=1&subtype=0"
 #     rtsp_sub_url:  "rtsp://{{ nvr_camera_rtsp_user }}:{{ nvr_camera_rtsp_pass }}@10.1.40.14:554/cam/realmonitor?channel=1&subtype=1"
+
+# ── Internal PKI (roles/pki) ────────────────────────────────────────────────
+# No secrets required — all PKI lifecycle managed by cert-manager in-cluster.
+# Defaults are defined in roles/pki/defaults/main.yml and can be overridden here.
+# pki_ca_namespace: cert-manager
+# pki_cert_namespace: traefik
+# pki_ca_name: fleet1-lan-ca
+# pki_ca_secret_name: fleet1-lan-ca-secret
+# pki_wildcard_name: fleet1-lan-wildcard-tls
+# pki_wildcard_secret_name: fleet1-lan-wildcard-tls
