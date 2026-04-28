@@ -21,9 +21,10 @@ Address = 10.1.254.2/32
 DNS = 10.1.1.1
 
 [Peer]
-PublicKey = <SERVER_PUBLIC_KEY>
-Endpoint = <OPNSENSE_WAN_IP>:51820
+PublicKey = <SERVER_PUBLIC_KEY_FROM_OPNSENSE>
+Endpoint = vpn.fleet1.cloud:51820
 AllowedIPs = 10.1.1.0/24, 10.1.20.0/24, 10.1.254.0/24
+
 ```
 2. Import the config into your Wireguard client.
 3. Activate the tunnel.
