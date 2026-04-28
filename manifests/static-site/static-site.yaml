@@ -90,3 +90,13 @@ spec:
                 name: static-site
                 port:
                   number: 80
+    - host: fleet1.lan
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: static-site
+                port:
+                  number: 80
