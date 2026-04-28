@@ -4,4 +4,9 @@ group_vars/all.yml
 *.retry
 *.log
 .DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
 ha-frigate-config.txt
