@@ -5,10 +5,11 @@
 image:
   tag: "2.0.22"
 
-# Expose MQTTS directly on the cluster node IPs (10.1.20.x:8883).
-# Traffic stays on the LAN — not routed through Traefik or the Cloudflare tunnel.
+# Mosquitto is deployed as raw manifests (manifests/home-automation/prereqs/mosquitto.yaml),
+# not this Helm chart. This template is retained for initial bootstrap reference only.
+# The live service is ClusterIP; all external access routes through Traefik (SNI passthrough).
 service:
-  type: LoadBalancer
+  type: ClusterIP
   port: 8883
 
 persistence:

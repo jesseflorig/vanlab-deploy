@@ -19,7 +19,7 @@ spec:
     name: home-automation-ca
     kind: ClusterIssuer
   dnsNames:
-    - mqtt.fleet1.cloud
+    - mqtt.fleet1.lan
     - mosquitto.home-automation.svc.cluster.local
     - mosquitto.home-automation
   usages:

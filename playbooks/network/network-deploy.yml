@@ -318,6 +318,45 @@
       when: not fleet1_lan_dnat_exists
       changed_when: dnat_create_result.json.result | default('') == 'saved'
 
+    - name: Check if fleet1.lan MQTTS DNAT rule already exists
+      ansible.builtin.set_fact:
+        fleet1_lan_mqtts_dnat_exists: >-
+          {{ existing_dnat_rules.json.rows
+             | selectattr('descr', 'equalto', 'fleet1.lan MQTTS → Traefik NodePort')
+             | list | length > 0 }}
+
+    - name: Create fleet1.lan MQTTS → Traefik NodePort DNAT rule
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/firewall/d_nat/addRule"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body:
+          rule:
+            disabled: "0"
+            nordr: "0"
+            interface: lan
+            ipprotocol: inet
+            protocol: tcp
+            destination:
+              network: ""
+              address: "10.1.20.11"
+              port: "8883"
+              not: "0"
+            target: "10.1.20.11"
+            local-port: "30883"
+            descr: "fleet1.lan MQTTS → Traefik NodePort"
+            log: "0"
+            nosync: "0"
+        return_content: true
+        status_code: [200]
+      register: mqtts_dnat_create_result
+      when: not fleet1_lan_mqtts_dnat_exists
+      changed_when: mqtts_dnat_create_result.json.result | default('') == 'saved'
+
     - name: Apply Destination NAT configuration
       ansible.builtin.uri:
         url: "{{ opnsense_api_base }}/firewall/d_nat/apply"
@@ -331,5 +370,5 @@
         return_content: true
         status_code: [200]
       register: dnat_apply_result
-      when: not fleet1_lan_dnat_exists
+      when: not fleet1_lan_dnat_exists or not fleet1_lan_mqtts_dnat_exists
       changed_when: dnat_apply_result.json.status | default('') == 'ok'

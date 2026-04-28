@@ -1,5 +1,5 @@
 ---
-# TCP IngressRoute: routes mqtt.fleet1.cloud:8883 → mosquitto:8883
+# TCP IngressRoute: routes mqtt.fleet1.lan:8883 → mosquitto:8883
 # TLS passthrough — Mosquitto terminates TLS using the home-automation-ca cert.
 # Traefik reads the SNI from the unencrypted ClientHello to match the rule.
 # sync wave 7: after the mosquitto Service (wave 6) exists.
@@ -14,7 +14,7 @@ spec:
   entryPoints:
     - mqtts
   routes:
-    - match: HostSNI(`mqtt.fleet1.cloud`)
+    - match: HostSNI(`mqtt.fleet1.lan`)
       services:
         - name: mosquitto
           port: 8883
