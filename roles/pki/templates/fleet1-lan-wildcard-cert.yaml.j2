@@ -11,6 +11,7 @@ spec:
   secretName: "{{ pki_wildcard_secret_name }}"
   dnsNames:
     - "*.fleet1.lan"
+    - "fleet1.lan"
   issuerRef:
     name: "{{ pki_ca_name }}"
     kind: ClusterIssuer
