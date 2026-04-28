@@ -216,6 +216,37 @@
       when: not fleet1_lan_override_exists
       changed_when: unbound_create_result.json.result | default('') == 'saved'
 
+    - name: Check if fleet1.lan apex override already exists
+      ansible.builtin.set_fact:
+        fleet1_lan_apex_exists: >-
+          {{ existing_unbound_overrides.json.rows
+             | selectattr('hostname', 'equalto', '')
+             | selectattr('domain', 'equalto', 'fleet1.lan')
+             | list | length > 0 }}
+
+    - name: Create fleet1.lan apex host override
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/unbound/settings/addHostOverride"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body:
+          host:
+            enabled: "1"
+            hostname: ""
+            domain: "fleet1.lan"
+            rr: "A"
+            server: "10.1.20.11"
+            description: "fleet1.lan apex → Traefik node1"
+        return_content: true
+        status_code: [200]
+      register: unbound_apex_result
+      when: not fleet1_lan_apex_exists
+      changed_when: unbound_apex_result.json.result | default('') == 'saved'
+
     - name: Apply Unbound configuration
       ansible.builtin.uri:
         url: "{{ opnsense_api_base }}/unbound/service/reconfigure"
@@ -229,7 +260,7 @@
         return_content: true
         status_code: [200]
       register: unbound_apply_result
-      when: not fleet1_lan_override_exists
+      when: not fleet1_lan_override_exists or not fleet1_lan_apex_exists
       changed_when: unbound_apply_result.json.status | default('') == 'ok'
 
     # --- Destination NAT: fleet1.lan HTTPS → Traefik NodePort ---
