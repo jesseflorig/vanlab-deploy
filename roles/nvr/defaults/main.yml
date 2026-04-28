@@ -28,6 +28,7 @@ nvr_frigate_image: "ghcr.io/blakeblackshear/frigate:stable"
 # Frigate web UI port (host-bound)
 nvr_frigate_port: 5000
 
-# MQTT topic prefix and client ID
+# MQTT broker hostname and topic/client identity
+nvr_mqtt_broker_host: "mqtt.fleet1.lan"
 nvr_mqtt_topic_prefix: "frigate"
 nvr_mqtt_client_id: "frigate-nvr"

@@ -5,7 +5,7 @@
 mosquitto_namespace: home-automation
 mosquitto_chart_version: "1.0.7"
 mosquitto_pvc_size: "1Gi"
-mosquitto_hostname: mqtt.fleet1.cloud
+mosquitto_hostname: mqtt.fleet1.lan
 
 # Stakater Reloader — watches the mosquitto-tls Secret and triggers a pod restart
 # on cert rotation so Mosquitto always serves a fresh certificate.

@@ -129,8 +129,9 @@ node_red_admin_password_bcrypt: "<BCRYPT_HASH>"
 # Frigate web UI admin password
 nvr_frigate_admin_password: <NVR_FRIGATE_ADMIN_PASSWORD>
 
-# MQTT broker IP (internal, cluster VLAN — do not use public DNS)
-nvr_mqtt_broker_ip: <NVR_MQTT_BROKER_IP>  # e.g. 10.1.20.x
+# MQTT broker hostname — default is mqtt.fleet1.lan (set in roles/nvr/defaults/main.yml)
+# Override here only if your broker hostname differs from the default.
+# nvr_mqtt_broker_host: mqtt.fleet1.lan
 # MQTT client cert/key/CA are read automatically from the cluster by the playbook
 # (cert-manager issues frigate-mqtt-client in the frigate namespace via ArgoCD sync)
 
