@@ -2,7 +2,7 @@
 
 Ansible automation for the Vanlab homelab — K3s cluster, edge compute, and network infrastructure.
 
-**Hardware**: 4x CM5 64GB w/ PoE HAT + M.2 2TB NVMe drives (cluster), 1x Waveshare CM5-PoE-BASE-A (edge)
+**Hardware**: 6x CM5 64GB w/ PoE HAT + M.2 2TB NVMe drives (cluster), 1x Waveshare CM5-PoE-BASE-A (edge)
 
 ## Prerequisites
 
@@ -64,7 +64,7 @@ playbooks/
 |-------|---------|-------|
 | `servers` | node1, node3, node5 | K3s control-plane + etcd nodes (10.1.20.11, .13, .15) |
 | `agents` | node2, node4, node6 | K3s worker nodes (10.1.20.12, .14, .16) |
-| `cluster` | servers + agents | Full K3s cluster |
+| `cluster` | servers + agents | Full 6-node K3s cluster |
 | `compute` | edge | CM5 Cloudflared device (10.1.10.x) |
 
 OPNsense (10.1.1.1) and unmanaged switches are documented as topology comments in `hosts.ini` — managed via `network-deploy.yml` using the `oxlorg.opnsense` REST API collection.
@@ -73,11 +73,11 @@ OPNsense (10.1.1.1) and unmanaged switches are documented as topology comments i
 
 The cluster uses K3s embedded etcd. Server count **must be odd** (1, 3, or 5) for quorum:
 
-| Servers | Fault tolerance |
-|---------|----------------|
-| 1 | None — any failure = cluster down |
-| 3 | 1 node |
-| 5 | 2 nodes |
+| Servers | Fault tolerance | Status |
+|---------|----------------|--------|
+| 1 | None — any failure = cluster down | |
+| 3 | 1 node | **Active** |
+| 5 | 2 nodes | |
 
 The first entry in `[servers]` initializes the etcd cluster (`--cluster-init`). Additional entries join the quorum automatically on the next `k3s-deploy.yml` run.
 
