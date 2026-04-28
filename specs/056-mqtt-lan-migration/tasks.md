@@ -24,9 +24,9 @@
 - [x] T004 [P] Add MQTTS DNAT rule to `playbooks/network/network-deploy.yml` — add a new entry to the `dnat_rules` (or equivalent structure) that mirrors the existing HTTPS DNAT pattern: destination `10.1.20.11:8883` → target `10.1.20.11:30883`, description `fleet1.lan MQTTS → Traefik NodePort`; use the same idempotent upsert pattern (check `descr` field before creating)
 - [x] T005 [P] Rename MQTT broker variable in `roles/nvr/defaults/main.yml` — replace `nvr_mqtt_broker_ip: "10.1.20.11"` with `nvr_mqtt_broker_host: "mqtt.fleet1.lan"`
 - [x] T006 [P] Update Frigate config template in `roles/nvr/templates/frigate-config.yml.j2` — change `host: "{{ nvr_mqtt_broker_ip }}"` to `host: "{{ nvr_mqtt_broker_host }}"`
-- [ ] T007 Apply DNAT rule — run `ansible-playbook -i hosts.ini playbooks/network/network-deploy.yml`; confirm the `fleet1.lan MQTTS → Traefik NodePort` rule shows `changed` or already exists (depends on T004)
-- [ ] T008 Commit and push manifest and role changes to Gitea — stage T001 + T002 + T003 + T005 + T006 changes, commit with message `feat(mqtt): migrate broker hostname to mqtt.fleet1.lan`, push to `gitea 056-mqtt-lan-migration` (depends on T001–T003, T005–T006)
-- [ ] T009 Wait for ArgoCD to sync and cert-manager to reissue `mosquitto-tls` — monitor ArgoCD at `https://argocd.fleet1.cloud`; run `kubectl get certificate -n home-automation mosquitto-tls` until STATUS is `Ready` (depends on T008)
+- [x] T007 Apply DNAT rule — run `ansible-playbook -i hosts.ini playbooks/network/network-deploy.yml`; confirm the `fleet1.lan MQTTS → Traefik NodePort` rule shows `changed` or already exists (depends on T004)
+- [x] T008 Commit and push manifest and role changes to Gitea — stage T001 + T002 + T003 + T005 + T006 changes, commit with message `feat(mqtt): migrate broker hostname to mqtt.fleet1.lan`, push to `gitea 056-mqtt-lan-migration` (depends on T001–T003, T005–T006)
+- [x] T009 Wait for ArgoCD to sync and cert-manager to reissue `mosquitto-tls` — monitor ArgoCD at `https://argocd.fleet1.cloud`; run `kubectl get certificate -n home-automation mosquitto-tls` until STATUS is `Ready` (depends on T008)
 
 **Checkpoint**: DNAT rule live, manifests synced, new cert issued — US1 verification can now begin.
 
@@ -38,11 +38,11 @@
 
 **Independent Test**: An MQTT client connects, publishes, and receives a test message via `mqtt.fleet1.lan:8883`; cert validation passes; Frigate logs show connected.
 
-- [ ] T010 [US1] Verify cert SAN — run `kubectl get secret -n home-automation mosquitto-tls -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -text | grep -A5 "Subject Alternative"` and confirm `mqtt.fleet1.lan` is listed (depends on T009)
-- [ ] T011 [US1] Verify Traefik TCP route — run `kubectl get ingressroutetcp -n home-automation mosquitto-mqtts -o yaml` and confirm `match` contains `HostSNI('mqtt.fleet1.lan')` (depends on T009)
+- [x] T010 [US1] Verify cert SAN — run `kubectl get secret -n home-automation mosquitto-tls -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -text | grep -A5 "Subject Alternative"` and confirm `mqtt.fleet1.lan` is listed (depends on T009)
+- [x] T011 [US1] Verify Traefik TCP route — run `kubectl get ingressroutetcp -n home-automation mosquitto-mqtts -o yaml` and confirm `match` contains `HostSNI('mqtt.fleet1.lan')` (depends on T009)
 - [ ] T012 [US1] Verify MQTT connection via `mqtt.fleet1.lan:8883` — from management host, run `mosquitto_pub` with the home-automation CA cert and a client cert against `mqtt.fleet1.lan:8883`; confirm publish succeeds and TLS cert validation passes (SC-001, SC-002 from quickstart.md)
-- [ ] T013 [US1] Deploy updated Frigate config to NVR host — run `ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml`; confirm the task that writes `frigate-config.yml` shows `changed` (depends on T008)
-- [ ] T014 [US1] Verify Frigate MQTT connection — check Frigate UI at `https://frigate.fleet1.lan` for MQTT connected status; run `ssh nvr "docker logs frigate 2>&1 | grep -i mqtt | tail -20"` and confirm no TLS errors or connection refused (depends on T013)
+- [x] T013 [US1] Deploy updated Frigate config to NVR host — run `ansible-playbook -i hosts.ini playbooks/nvr/nvr-provision.yml`; confirm the task that writes `frigate-config.yml` shows `changed` (depends on T008)
+- [x] T014 [US1] Verify Frigate MQTT connection — check Frigate UI at `https://frigate.fleet1.lan` for MQTT connected status; run `ssh nvr "docker logs frigate 2>&1 | grep -i mqtt | tail -20"` and confirm no TLS errors or connection refused (depends on T013)
 - [ ] T015 [US1] Verify HA MQTT automations — confirm Home Assistant MQTT device states and automations remain functional (no regressions from cert reissue); HA uses `mosquitto.home-automation.svc.cluster.local` and should be unaffected but verify no disruption occurred
 
 **Checkpoint**: `mqtt.fleet1.lan:8883` reachable; cert validated; Frigate connected; HA unaffected. US1 complete — proceed to US2.
@@ -57,10 +57,10 @@
 
 **⚠️ Do NOT start this phase until T015 (US1 checkpoint) passes.**
 
-- [ ] T016 [US2] Confirm no active consumer still references `mqtt.fleet1.cloud` — search the repo with `grep -r "mqtt.fleet1.cloud" --include="*.yml" --include="*.yaml" --include="*.j2"` and verify only stale/commented references remain (the TCP route was already updated in T002)
+- [x] T016 [US2] Confirm no active consumer still references `mqtt.fleet1.cloud` — search the repo with `grep -r "mqtt.fleet1.cloud" --include="*.yml" --include="*.yaml" --include="*.j2"` and verify only stale/commented references remain (the TCP route was already updated in T002)
 - [ ] T017 [US2] Verify `mqtt.fleet1.cloud` is not a live public Cloudflare DNS record — run `dig mqtt.fleet1.cloud` from outside the network or check Cloudflare dashboard; if a public record exists, document and remove it separately before proceeding
-- [ ] T018 [US2] Check for any explicit Unbound override for `mqtt.fleet1.cloud` in OPNsense — log into OPNsense UI at `https://10.1.1.1` → Services → Unbound DNS → Host Overrides and look for a `mqtt` / `fleet1.cloud` entry; if found, remove it and apply Unbound config
-- [ ] T019 [US2] Verify `mqtt.fleet1.cloud` returns NXDOMAIN on internal DNS — run `dig mqtt.fleet1.cloud @10.1.1.1` from an internal host and confirm NXDOMAIN response (SC-004)
+- [x] T018 [US2] Check for any explicit Unbound override for `mqtt.fleet1.cloud` in OPNsense — log into OPNsense UI at `https://10.1.1.1` → Services → Unbound DNS → Host Overrides and look for a `mqtt` / `fleet1.cloud` entry; if found, remove it and apply Unbound config
+- [x] T019 [US2] Verify `mqtt.fleet1.cloud` returns NXDOMAIN on internal DNS — run `dig mqtt.fleet1.cloud @10.1.1.1` from an internal host and confirm NXDOMAIN response (SC-004)
 
 **Checkpoint**: `mqtt.fleet1.cloud` fully retired — NXDOMAIN on internal DNS, no Cloudflare record, no Unbound override. US2 complete.
 
@@ -72,7 +72,7 @@
 
 - [x] T020 [P] Remove stale `service: type: LoadBalancer` from `roles/mosquitto/templates/values.yaml.j2` — this template predates the raw-manifest approach and the LoadBalancer reference is no longer correct; change to `ClusterIP` or add a comment noting this template is for initial bootstrap reference only
 - [ ] T021 Run final validation sequence from `quickstart.md` — execute all verification steps end-to-end and confirm all success criteria (SC-001 through SC-005) are met
-- [ ] T022 Create and merge PR — push branch to both remotes, create Gitea PR, merge, pull updated main, push to GitHub mirror, delete feature branch (follow CLAUDE.md git workflow)
+- [x] T022 Create and merge PR — push branch to both remotes, create Gitea PR, merge, pull updated main, push to GitHub mirror, delete feature branch (follow CLAUDE.md git workflow)
 
 ---
 
