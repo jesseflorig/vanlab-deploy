@@ -1,0 +1,10 @@
+---
+# selfsigned-issuer ClusterIssuer — bootstraps the fleet1.lan CA chain.
+# This resource already exists in the cluster (created by home-automation prereqs).
+# Applying it here is idempotent; it ensures it exists for fresh cluster builds.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-issuer
+spec:
+  selfSigned: {}

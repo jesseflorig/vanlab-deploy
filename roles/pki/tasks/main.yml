@@ -1,0 +1,99 @@
+---
+# roles/pki/tasks/main.yml
+# Provisions the fleet1.lan internal CA chain and wildcard TLS cert via cert-manager.
+#
+# Resource creation order (enforced by sequential waits):
+#   1. selfsigned-issuer ClusterIssuer   (idempotent — may already exist)
+#   2. fleet1-lan-ca Certificate         (CA cert, cert-manager ns)
+#   3. fleet1-lan-ca ClusterIssuer       (signs wildcard cert using CA secret)
+#   4. fleet1-lan-wildcard-tls Certificate (traefik ns)
+#   5. TLSStore default update           (adds wildcard cert to Traefik SNI pool)
+#
+# Usage:
+#   ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags pki
+
+- name: Render selfsigned-issuer ClusterIssuer manifest
+  ansible.builtin.template:
+    src: fleet1-lan-ca-issuer.yaml.j2
+    dest: /tmp/fleet1-lan-ca-issuer.yaml
+    mode: "0644"
+  run_once: true
+
+- name: Apply selfsigned-issuer ClusterIssuer (idempotent)
+  ansible.builtin.command: >
+    kubectl apply -f /tmp/fleet1-lan-ca-issuer.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: issuer_result
+  changed_when: "'created' in issuer_result.stdout or 'configured' in issuer_result.stdout"
+  run_once: true
+
+- name: Render fleet1-lan CA Certificate + ClusterIssuer manifest
+  ansible.builtin.template:
+    src: fleet1-lan-ca-cert.yaml.j2
+    dest: /tmp/fleet1-lan-ca-cert.yaml
+    mode: "0644"
+  run_once: true
+
+- name: Apply fleet1-lan CA Certificate + ClusterIssuer
+  ansible.builtin.command: >
+    kubectl apply -f /tmp/fleet1-lan-ca-cert.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: ca_result
+  changed_when: "'created' in ca_result.stdout or 'configured' in ca_result.stdout"
+  run_once: true
+
+- name: Wait for fleet1-lan-ca Certificate to be Ready
+  ansible.builtin.command: >
+    kubectl wait certificate/{{ pki_ca_name }}
+    -n {{ pki_ca_namespace }}
+    --for=condition=Ready
+    --timeout=60s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+- name: Render fleet1-lan wildcard Certificate manifest
+  ansible.builtin.template:
+    src: fleet1-lan-wildcard-cert.yaml.j2
+    dest: /tmp/fleet1-lan-wildcard-cert.yaml
+    mode: "0644"
+  run_once: true
+
+- name: Apply fleet1-lan wildcard Certificate
+  ansible.builtin.command: >
+    kubectl apply -f /tmp/fleet1-lan-wildcard-cert.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: wildcard_result
+  changed_when: "'created' in wildcard_result.stdout or 'configured' in wildcard_result.stdout"
+  run_once: true
+
+- name: Wait for fleet1-lan-wildcard-tls Certificate to be Ready
+  ansible.builtin.command: >
+    kubectl wait certificate/{{ pki_wildcard_name }}
+    -n {{ pki_cert_namespace }}
+    --for=condition=Ready
+    --timeout=60s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false
+  run_once: true
+
+- name: Render Traefik TLSStore manifest
+  ansible.builtin.template:
+    src: fleet1-lan-tls-store.yaml.j2
+    dest: /tmp/fleet1-lan-tls-store.yaml
+    mode: "0644"
+  run_once: true
+
+- name: Apply Traefik TLSStore (adds fleet1.lan wildcard to SNI cert pool)
+  ansible.builtin.command: >
+    kubectl apply -f /tmp/fleet1-lan-tls-store.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: tls_store_result
+  changed_when: "'created' in tls_store_result.stdout or 'configured' in tls_store_result.stdout"
+  run_once: true

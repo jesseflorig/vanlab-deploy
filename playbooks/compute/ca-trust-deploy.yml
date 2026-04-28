@@ -1,0 +1,82 @@
+---
+# ca-trust-deploy.yml
+# Installs the fleet1.lan internal CA root certificate into the macOS System Keychain
+# on the management laptop (localhost), enabling browsers and CLI tools to trust
+# *.fleet1.lan TLS certificates without warnings.
+#
+# Must be re-run after an OS reinstall or on any new management machine.
+#
+# Usage:
+#   ansible-playbook -i hosts.ini playbooks/compute/ca-trust-deploy.yml
+#
+# Prerequisites:
+#   - PKI role has run: ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags pki
+#   - fleet1-lan-ca-secret exists in the cert-manager namespace
+#   - Ansible has SSH access to at least one cluster server node
+
+- name: Install fleet1.lan CA root cert in macOS System Keychain
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    pki_ca_namespace: cert-manager
+    pki_ca_secret_name: fleet1-lan-ca-secret
+    ca_cert_tmp_remote: /tmp/fleet1-lan-ca.crt
+    ca_cert_tmp_local: /tmp/fleet1-lan-ca.crt
+    keychain_path: /Library/Keychains/System.keychain
+  tasks:
+    - name: Extract CA cert from cluster secret (delegated to server node)
+      ansible.builtin.shell: |
+        kubectl get secret {{ pki_ca_secret_name }} \
+          -n {{ pki_ca_namespace }} \
+          -o jsonpath='{.data.ca\.crt}' | base64 -d > {{ ca_cert_tmp_remote }}
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      delegate_to: "{{ groups['servers'][0] }}"
+      changed_when: false
+
+    - name: Fetch CA cert from server node to localhost
+      ansible.builtin.fetch:
+        src: "{{ ca_cert_tmp_remote }}"
+        dest: "{{ ca_cert_tmp_local }}"
+        flat: true
+      delegate_to: "{{ groups['servers'][0] }}"
+
+    - name: Check if fleet1-lan CA cert is already trusted in System Keychain
+      ansible.builtin.command: >
+        security find-certificate -a -c "fleet1-lan-ca" {{ keychain_path }}
+      register: cert_check
+      failed_when: false
+      changed_when: false
+
+    - name: Install CA cert into macOS System Keychain
+      ansible.builtin.command: >
+        security add-trusted-cert -d -r trustRoot
+        -k {{ keychain_path }}
+        {{ ca_cert_tmp_local }}
+      become: true
+      when: cert_check.rc != 0
+      register: cert_install
+      changed_when: cert_install.rc == 0
+
+    - name: Remove temp CA cert file from localhost
+      ansible.builtin.file:
+        path: "{{ ca_cert_tmp_local }}"
+        state: absent
+      changed_when: false
+
+    - name: Remove temp CA cert file from server node
+      ansible.builtin.file:
+        path: "{{ ca_cert_tmp_remote }}"
+        state: absent
+      delegate_to: "{{ groups['servers'][0] }}"
+      changed_when: false
+
+    - name: Report CA trust status
+      ansible.builtin.debug:
+        msg: >-
+          {{
+            'fleet1-lan CA cert installed — browsers and CLI tools on this machine now trust *.fleet1.lan'
+            if cert_install is changed
+            else 'fleet1-lan CA cert already trusted — no changes made'
+          }}

@@ -1,0 +1,30 @@
+---
+# fleet1-lan-ca Certificate — self-signed root CA for all *.fleet1.lan internal TLS.
+# Issued by selfsigned-issuer. Private key stays in cluster; never committed to Git.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: "{{ pki_ca_name }}"
+  namespace: "{{ pki_ca_namespace }}"
+spec:
+  isCA: true
+  commonName: fleet1-lan-ca
+  secretName: "{{ pki_ca_secret_name }}"
+  privateKey:
+    algorithm: RSA
+    size: 4096
+  duration: "{{ pki_ca_duration }}"
+  renewBefore: "{{ pki_ca_renew_before }}"
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+---
+# fleet1-lan-ca ClusterIssuer — signs *.fleet1.lan wildcard cert using the CA above.
+# Must be applied after the Certificate above is Ready.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: "{{ pki_ca_name }}"
+spec:
+  ca:
+    secretName: "{{ pki_ca_secret_name }}"

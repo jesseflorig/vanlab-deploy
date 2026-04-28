@@ -1,6 +1,6 @@
 # vanlab Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-04-26
+Auto-generated from all feature plans. Last updated: 2026-04-27
 
 ## Active Technologies
 - YAML (Ansible 2.x) — existing project conventions (002-project-reorganization)
@@ -23,6 +23,10 @@ Auto-generated from all feature plans. Last updated: 2026-04-26
 - Local NVMe at `/var/lib/frigate/media` (continuous recordings); Longhorn RWX PVC `frigate-clips` (50Gi) NFS-mounted at `/mnt/frigate-clips` (event clips) (041-nvr-frigate-hailo)
 - YAML (Ansible 2.x) + Ansible, OPNsense REST API (`oxlorg.opnsense`), Docker (Frigate on NVR host), Jinja2 (049-frigate-cameras)
 - Local NVMe at `/var/lib/frigate/media` (continuous recordings, storage-managed); Longhorn RWX NFS PVC `frigate-clips` 50Gi (event clips, 30-day retention) (049-frigate-cameras)
+- YAML (Ansible 2.x + Kubernetes manifests) + cert-manager (already deployed), Traefik (already deployed), OPNsense (054-fleet1-lan-wildcard)
+- N/A — cert-manager secrets are in-cluster etcd; no PVC required (054-fleet1-lan-wildcard)
+- N/A — procedural upgrade (OPNsense web UI + SSH console) + OPNsense firmware upgrade mechanism; management laptop SSH access to `10.1.1.1` (055-opnsense-upgrade)
+- N/A — config backups stored as XML files on management laptop (055-opnsense-upgrade)
 
 - YAML (Ansible 2.x) — follows existing project conventions + `smartmontools` (apt) — installed idempotently by the playbook as a (001-node-disk-health)
 
@@ -42,9 +46,9 @@ tests/
 YAML (Ansible 2.x) — follows existing project conventions: Follow standard conventions
 
 ## Recent Changes
+- 055-opnsense-upgrade: Added N/A — procedural upgrade (OPNsense web UI + SSH console) + OPNsense firmware upgrade mechanism; management laptop SSH access to `10.1.1.1`
+- 054-fleet1-lan-wildcard: Added YAML (Ansible 2.x + Kubernetes manifests) + cert-manager (already deployed), Traefik (already deployed), OPNsense
 - 049-frigate-cameras: Added YAML (Ansible 2.x) + Ansible, OPNsense REST API (`oxlorg.opnsense`), Docker (Frigate on NVR host), Jinja2
-- 041-nvr-frigate-hailo: Added YAML (Ansible 2.x) for host provisioning; YAML (Kubernetes manifests) for cluster-side resources + Ansible, Docker (on NVR host), Hailo PCIe driver (`h10-hailort-pcie-driver` + `hailo-all`), Frigate (`ghcr.io/blakeblackshear/frigate:stable`), Longhorn v1.11.1 (existing), Traefik (existing), cert-manager (existing), ArgoCD (existing)
-- 040-rack-shutdown-script: Added YAML (Ansible 2.x) — existing project conventions + Ansible, kubectl (delegated to localhost for Longhorn pre-flight check), SSH
 
 
 <!-- MANUAL ADDITIONS START -->

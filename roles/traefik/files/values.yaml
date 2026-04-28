@@ -31,7 +31,7 @@ ingressRoute:
     enabled: true
     entryPoints:
       - websecure
-    matchRule: Host(`traefik.fleet1.cloud`)
+    matchRule: Host(`traefik.fleet1.cloud`) || Host(`traefik.fleet1.lan`)
 
 providers:
   kubernetesCRD:
