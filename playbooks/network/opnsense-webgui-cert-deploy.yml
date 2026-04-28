@@ -1,0 +1,114 @@
+---
+# opnsense-webgui-cert-deploy.yml
+# Replaces the existing OPNsense Web GUI certificate in-place with the
+# fleet1.lan wildcard certificate issued by cert-manager.
+#
+# This preserves the current Web GUI ssl-certref by updating the selected
+# certificate entry in place. The OPNsense API user needs System: Trust:
+# Certificates privileges for /api/trust/cert/set/<uuid>.
+#
+# Usage:
+#   ansible-playbook -i hosts.ini playbooks/network/opnsense-webgui-cert-deploy.yml
+
+- name: Read fleet1.lan wildcard certificate from the cluster
+  hosts: node1
+  become: true
+  gather_facts: false
+  vars:
+    pki_cert_namespace: traefik
+    pki_wildcard_secret_name: fleet1-lan-wildcard-tls
+  tasks:
+    - name: Read fleet1.lan wildcard certificate
+      ansible.builtin.shell: >
+        kubectl get secret {{ pki_wildcard_secret_name }}
+        -n {{ pki_cert_namespace }}
+        -o jsonpath='{.data.tls\.crt}' | base64 -d
+      args:
+        executable: /bin/bash
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: fleet1_lan_tls_crt
+      changed_when: false
+      no_log: true
+
+    - name: Read fleet1.lan wildcard private key
+      ansible.builtin.shell: >
+        kubectl get secret {{ pki_wildcard_secret_name }}
+        -n {{ pki_cert_namespace }}
+        -o jsonpath='{.data.tls\.key}' | base64 -d
+      args:
+        executable: /bin/bash
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: fleet1_lan_tls_key
+      changed_when: false
+      no_log: true
+
+- name: Install fleet1.lan certificate on OPNsense Web GUI
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    opnsense_api_base: "https://{{ opnsense_firewall }}/api"
+    opnsense_webgui_cert_uuid: "575f6ca7-43ae-430a-acd9-2f05b23dbd74"
+    opnsense_webgui_cert_descr: "fleet1.lan wildcard Web GUI certificate"
+  tasks:
+    - name: Update existing OPNsense Web GUI certificate in place
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/trust/cert/set/{{ opnsense_webgui_cert_uuid }}"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body:
+          cert:
+            action: import
+            descr: "{{ opnsense_webgui_cert_descr }}"
+            cert_type: usr_cert
+            private_key_location: firewall
+            crt_payload: "{{ hostvars['node1'].fleet1_lan_tls_crt.stdout }}"
+            prv_payload: "{{ hostvars['node1'].fleet1_lan_tls_key.stdout }}"
+            csr_payload: ""
+        return_content: true
+        status_code: [200]
+      register: opnsense_webgui_cert_update
+      changed_when: opnsense_webgui_cert_update.json.result | default('') == 'saved'
+      no_log: true
+
+    - name: Restart OPNsense Web GUI
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/core/service/restart/webgui"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body: {}
+        return_content: true
+        status_code: [200, -1]
+      register: opnsense_webgui_restart
+      failed_when: >-
+        opnsense_webgui_restart.status | default(0) not in [200, -1]
+      changed_when: true
+
+    - name: Wait for OPNsense Web GUI to answer
+      ansible.builtin.uri:
+        url: "https://opnsense.fleet1.lan/"
+        method: GET
+        # The controller's Python CA bundle may not include the fleet CA even
+        # when macOS/browser trust is configured, so this wait only checks
+        # service recovery after restart.
+        validate_certs: false
+        return_content: false
+        status_code: [200, 302, 403]
+      register: opnsense_webgui_check
+      retries: 12
+      delay: 5
+      until: opnsense_webgui_check is succeeded
+
+    - name: Report Web GUI certificate deployment
+      ansible.builtin.debug:
+        msg: "OPNsense Web GUI is reachable at https://opnsense.fleet1.lan after installing the fleet1.lan certificate."
