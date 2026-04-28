@@ -27,6 +27,15 @@ This project uses a dual-remote strategy (GitHub + Gitea) with automated PR crea
 - **`make merge`**: Merges the open PRs on both remotes (using `--admin` bypass for GitHub) and runs `make sync`.
 - **`make sync`**: Pulls the latest `main` from GitHub, updates local state, and prunes all merged branches.
 
+## Wireguard VPN
+
+Secure remote access to `fleet1.lan` is provided via Wireguard on the OPNsense router.
+
+1. Install the Wireguard client on your device.
+2. Use the configuration template in `specs/058-wireguard-management-vpn/quickstart.md`.
+3. Activate the tunnel to reach `10.1.1.x` and `10.1.20.x` subnets.
+4. Internal DNS (`fleet1.lan`) is available automatically over the tunnel.
+
 ## Quick Reference
 
 | Category | Playbook | Command |
