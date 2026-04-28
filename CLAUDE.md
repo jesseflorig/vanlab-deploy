@@ -1,6 +1,6 @@
 # vanlab Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-04-27
+Auto-generated from all feature plans. Last updated: 2026-04-28
 
 ## Active Technologies
 - YAML (Ansible 2.x) — existing project conventions (002-project-reorganization)
@@ -27,6 +27,8 @@ Auto-generated from all feature plans. Last updated: 2026-04-27
 - N/A — cert-manager secrets are in-cluster etcd; no PVC required (054-fleet1-lan-wildcard)
 - N/A — procedural upgrade (OPNsense web UI + SSH console) + OPNsense firmware upgrade mechanism; management laptop SSH access to `10.1.1.1` (055-opnsense-upgrade)
 - N/A — config backups stored as XML files on management laptop (055-opnsense-upgrade)
+- YAML (Ansible 2.x + Kubernetes manifests) + cert-manager (Certificate), Traefik v3 (IngressRouteTCP), ArgoCD (GitOps sync), OPNsense REST API (d_nat, unbound, firewall) (056-mqtt-lan-migration)
+- N/A — no storage changes (056-mqtt-lan-migration)
 
 - YAML (Ansible 2.x) — follows existing project conventions + `smartmontools` (apt) — installed idempotently by the playbook as a (001-node-disk-health)
 
@@ -46,9 +48,9 @@ tests/
 YAML (Ansible 2.x) — follows existing project conventions: Follow standard conventions
 
 ## Recent Changes
+- 056-mqtt-lan-migration: Added YAML (Ansible 2.x + Kubernetes manifests) + cert-manager (Certificate), Traefik v3 (IngressRouteTCP), ArgoCD (GitOps sync), OPNsense REST API (d_nat, unbound, firewall)
 - 055-opnsense-upgrade: Added N/A — procedural upgrade (OPNsense web UI + SSH console) + OPNsense firmware upgrade mechanism; management laptop SSH access to `10.1.1.1`
 - 054-fleet1-lan-wildcard: Added YAML (Ansible 2.x + Kubernetes manifests) + cert-manager (already deployed), Traefik (already deployed), OPNsense
-- 049-frigate-cameras: Added YAML (Ansible 2.x) + Ansible, OPNsense REST API (`oxlorg.opnsense`), Docker (Frigate on NVR host), Jinja2
 
 
 <!-- MANUAL ADDITIONS START -->

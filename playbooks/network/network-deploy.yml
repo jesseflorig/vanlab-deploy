@@ -26,6 +26,48 @@
   vars:
     opnsense_api_base: "https://{{ opnsense_firewall }}/api"
     opnsense_auth: "{{ opnsense_api_key }}:{{ opnsense_api_secret }}"
+    fleet1_lan_infra_dns_records:
+      - hostname: opnsense
+        domain: fleet1.lan
+        rr: A
+        server: 10.1.1.1
+        addptr: "0"
+        description: "OPNsense router/firewall"
+      - hostname: sw-main
+        domain: fleet1.lan
+        rr: A
+        server: 10.1.1.10
+        addptr: "0"
+        description: "Main management switch"
+      - hostname: sw-poe-1
+        domain: fleet1.lan
+        rr: A
+        server: 10.1.1.11
+        addptr: "0"
+        description: "PoE switch 1"
+      - hostname: sw-poe-2
+        domain: fleet1.lan
+        rr: A
+        server: 10.1.1.12
+        addptr: "0"
+        description: "PoE switch 2"
+      - hostname: sw-poe-3
+        domain: fleet1.lan
+        rr: A
+        server: 10.1.1.13
+        addptr: "0"
+        description: "PoE switch 3"
+    fleet1_lan_traefik_dns_records:
+      - hostname: argocd
+      - hostname: frigate
+      - hostname: gitea
+      - hostname: grafana
+      - hostname: hass
+      - hostname: influxdb
+      - hostname: mqtt
+      - hostname: node-red
+      - hostname: prometheus
+      - hostname: traefik
     # NVR firewall rules — idempotency key is the description field
     nvr_rules:
       - seq: 200
@@ -166,7 +208,8 @@
       changed_when: apply_result.json.status | default('') == 'ok'
 
     # ── fleet1.lan Unbound DNS override ──────────────────────────────────────
-    # Wildcard host override: *.fleet1.lan → 10.1.20.11 (Traefik NodePort host)
+    # OPNsense 26.1 Unbound will not start with a wildcard host override and
+    # explicit host overrides in the same domain. Keep explicit records instead.
     # Idempotency: search existing overrides by domain+hostname before creating.
     - name: Fetch existing Unbound host overrides
       ansible.builtin.uri:
@@ -185,36 +228,32 @@
         status_code: [200]
       register: existing_unbound_overrides
 
-    - name: Check if fleet1.lan wildcard override already exists
+    - name: Find fleet1.lan wildcard override
       ansible.builtin.set_fact:
-        fleet1_lan_override_exists: >-
+        fleet1_lan_wildcard_overrides: >-
           {{ existing_unbound_overrides.json.rows
              | selectattr('hostname', 'equalto', '*')
              | selectattr('domain', 'equalto', 'fleet1.lan')
-             | list | length > 0 }}
+             | list }}
 
-    - name: Create fleet1.lan wildcard host override
+    - name: Disable incompatible fleet1.lan wildcard host override
       ansible.builtin.uri:
-        url: "{{ opnsense_api_base }}/unbound/settings/addHostOverride"
+        url: "{{ opnsense_api_base }}/unbound/settings/toggleHostOverride/{{ item.uuid }}/0"
         method: POST
         url_username: "{{ opnsense_api_key }}"
         url_password: "{{ opnsense_api_secret }}"
         force_basic_auth: true
         validate_certs: "{{ opnsense_api_verify_ssl }}"
         body_format: json
-        body:
-          host:
-            enabled: "1"
-            hostname: "*"
-            domain: "fleet1.lan"
-            rr: "A"
-            server: "10.1.20.11"
-            description: "fleet1.lan wildcard → Traefik node1 (DNAT 443→30443 via OPNsense)"
+        body: {}
         return_content: true
         status_code: [200]
-      register: unbound_create_result
-      when: not fleet1_lan_override_exists
-      changed_when: unbound_create_result.json.result | default('') == 'saved'
+      register: unbound_wildcard_disable_results
+      loop: "{{ fleet1_lan_wildcard_overrides }}"
+      loop_control:
+        label: "*.fleet1.lan"
+      when: item.enabled | default('0') == '1'
+      changed_when: true
 
     - name: Check if fleet1.lan apex override already exists
       ansible.builtin.set_fact:
@@ -240,12 +279,190 @@
             domain: "fleet1.lan"
             rr: "A"
             server: "10.1.20.11"
+            addptr: "0"
             description: "fleet1.lan apex → Traefik node1"
         return_content: true
         status_code: [200]
       register: unbound_apex_result
       when: not fleet1_lan_apex_exists
       changed_when: unbound_apex_result.json.result | default('') == 'saved'
+
+    - name: Build desired Traefik fleet1.lan records
+      ansible.builtin.set_fact:
+        fleet1_lan_traefik_dns_records_expanded: >-
+          {{ fleet1_lan_traefik_dns_records_expanded | default([]) + [{
+            'hostname': item.hostname,
+            'domain': 'fleet1.lan',
+            'rr': 'A',
+            'server': '10.1.20.11',
+            'addptr': '0',
+            'description': item.hostname ~ '.fleet1.lan -> Traefik node1'
+          }] }}
+      loop: "{{ fleet1_lan_traefik_dns_records }}"
+      loop_control:
+        label: "{{ item.hostname }}.fleet1.lan"
+
+    - name: Build existing fleet1.lan Traefik override lookup
+      ansible.builtin.set_fact:
+        fleet1_lan_traefik_existing_by_hostname: >-
+          {{ fleet1_lan_traefik_existing_by_hostname | default({}) | combine({
+            item.hostname: existing_unbound_overrides.json.rows
+              | selectattr('hostname', 'equalto', item.hostname)
+              | selectattr('domain', 'equalto', item.domain)
+              | list
+          }) }}
+      loop: "{{ fleet1_lan_traefik_dns_records_expanded }}"
+      loop_control:
+        label: "{{ item.hostname }}.{{ item.domain }}"
+
+    - name: Fail on conflicting fleet1.lan Traefik hostnames
+      ansible.builtin.fail:
+        msg: >-
+          Conflicting Unbound host override for {{ item.hostname }}.{{ item.domain }}:
+          expected {{ item.server }}, found {{
+            fleet1_lan_traefik_existing_by_hostname[item.hostname]
+            | map(attribute='server')
+            | list
+            | join(', ')
+          }}.
+      loop: "{{ fleet1_lan_traefik_dns_records_expanded }}"
+      loop_control:
+        label: "{{ item.hostname }}.{{ item.domain }}"
+      when: >-
+        fleet1_lan_traefik_existing_by_hostname[item.hostname]
+        | rejectattr('server', 'equalto', item.server)
+        | list
+        | length > 0
+
+    - name: Create explicit fleet1.lan Traefik host overrides
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/unbound/settings/addHostOverride"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body:
+          host:
+            enabled: "1"
+            hostname: "{{ item.hostname }}"
+            domain: "{{ item.domain }}"
+            rr: "{{ item.rr }}"
+            server: "{{ item.server }}"
+            addptr: "{{ item.addptr }}"
+            description: "{{ item.description }}"
+        return_content: true
+        status_code: [200]
+      register: unbound_traefik_create_results
+      loop: "{{ fleet1_lan_traefik_dns_records_expanded }}"
+      loop_control:
+        label: "{{ item.hostname }}.{{ item.domain }} -> {{ item.server }}"
+      when: >-
+        fleet1_lan_traefik_existing_by_hostname[item.hostname]
+        | selectattr('server', 'equalto', item.server)
+        | selectattr('rr', 'equalto', item.rr)
+        | selectattr('enabled', 'equalto', '1')
+        | list
+        | length == 0
+      changed_when: unbound_traefik_create_results.json.result | default('') == 'saved'
+
+    - name: Build existing fleet1.lan infrastructure override lookup
+      ansible.builtin.set_fact:
+        fleet1_lan_infra_existing_by_hostname: >-
+          {{ fleet1_lan_infra_existing_by_hostname | default({}) | combine({
+            item.hostname: existing_unbound_overrides.json.rows
+              | selectattr('hostname', 'equalto', item.hostname)
+              | selectattr('domain', 'equalto', item.domain)
+              | list
+          }) }}
+      loop: "{{ fleet1_lan_infra_dns_records }}"
+      loop_control:
+        label: "{{ item.hostname }}.{{ item.domain }}"
+
+    - name: Fail on conflicting fleet1.lan infrastructure hostnames
+      ansible.builtin.fail:
+        msg: >-
+          Conflicting Unbound host override for {{ item.hostname }}.{{ item.domain }}:
+          expected enabled {{ item.rr }} record for {{ item.server }}, found {{
+            fleet1_lan_infra_existing_by_hostname[item.hostname]
+            | map(attribute='server')
+            | list
+            | join(', ')
+          }}.
+      loop: "{{ fleet1_lan_infra_dns_records }}"
+      loop_control:
+        label: "{{ item.hostname }}.{{ item.domain }}"
+      when: >-
+        (
+          fleet1_lan_infra_existing_by_hostname[item.hostname]
+          | selectattr('server', 'equalto', item.server)
+          | selectattr('rr', 'equalto', item.rr)
+          | selectattr('enabled', 'equalto', '1')
+          | list
+          | length
+        ) != (
+          fleet1_lan_infra_existing_by_hostname[item.hostname]
+          | list
+          | length
+        )
+
+    - name: Fail on conflicting fleet1.lan infrastructure addresses
+      ansible.builtin.fail:
+        msg: >-
+          Conflicting Unbound host override for {{ item.server }}:
+          expected {{ item.hostname }}.{{ item.domain }}, found {{
+            existing_unbound_overrides.json.rows
+            | selectattr('domain', 'equalto', item.domain)
+            | selectattr('server', 'equalto', item.server)
+            | rejectattr('hostname', 'equalto', item.hostname)
+            | map(attribute='hostname')
+            | list
+            | join(', ')
+          }}.{{ item.domain }}.
+      loop: "{{ fleet1_lan_infra_dns_records }}"
+      loop_control:
+        label: "{{ item.server }}"
+      when: >-
+        existing_unbound_overrides.json.rows
+        | selectattr('domain', 'equalto', item.domain)
+        | selectattr('server', 'equalto', item.server)
+        | rejectattr('hostname', 'equalto', item.hostname)
+        | list
+        | length > 0
+
+    - name: Create fleet1.lan infrastructure host overrides
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/unbound/settings/addHostOverride"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body:
+          host:
+            enabled: "1"
+            hostname: "{{ item.hostname }}"
+            domain: "{{ item.domain }}"
+            rr: "{{ item.rr }}"
+            server: "{{ item.server }}"
+            addptr: "{{ item.addptr }}"
+            description: "{{ item.description }}"
+        return_content: true
+        status_code: [200]
+      register: unbound_infra_create_results
+      loop: "{{ fleet1_lan_infra_dns_records }}"
+      loop_control:
+        label: "{{ item.hostname }}.{{ item.domain }} -> {{ item.server }}"
+      when: >-
+        fleet1_lan_infra_existing_by_hostname[item.hostname]
+        | selectattr('server', 'equalto', item.server)
+        | selectattr('rr', 'equalto', item.rr)
+        | selectattr('enabled', 'equalto', '1')
+        | list
+        | length == 0
+      changed_when: unbound_infra_create_results.json.result | default('') == 'saved'
 
     - name: Apply Unbound configuration
       ansible.builtin.uri:
@@ -260,8 +477,47 @@
         return_content: true
         status_code: [200]
       register: unbound_apply_result
-      when: not fleet1_lan_override_exists or not fleet1_lan_apex_exists
+      when: >-
+        unbound_wildcard_disable_results.changed | default(false)
+        or not fleet1_lan_apex_exists
+        or unbound_traefik_create_results.changed | default(false)
+        or unbound_infra_create_results.changed | default(false)
       changed_when: unbound_apply_result.json.status | default('') == 'ok'
+
+    - name: Start Unbound resolver
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/unbound/service/start"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body: {}
+        return_content: true
+        status_code: [200]
+      register: unbound_start_result
+      changed_when: false
+
+    - name: Check Unbound resolver status
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/unbound/service/status"
+        method: GET
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        return_content: true
+        status_code: [200]
+      register: unbound_status_result
+
+    - name: Fail when Unbound resolver is not running
+      ansible.builtin.fail:
+        msg: >-
+          OPNsense Unbound service is {{ unbound_status_result.json.status | default('unknown') }}
+          after reconfigure/start. Host override records exist, but LAN DNS will not resolve until
+          the Unbound service starts successfully.
+      when: unbound_status_result.json.status | default('unknown') != 'running'
 
     # --- Destination NAT: fleet1.lan HTTPS → Traefik NodePort ---
     # Requires OPNsense 26.1+; API path is d_nat (not dnat)
