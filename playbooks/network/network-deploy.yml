@@ -29,6 +29,7 @@
     wireguard_vpn_subnet_cfg: "{{ wireguard_vpn_subnet | default('10.1.254.0/24') }}"
     wireguard_vpn_server_ip_cfg: "{{ wireguard_vpn_server_ip | default('10.1.254.1') }}"
     wireguard_vpn_client_ip_cfg: "{{ wireguard_vpn_client_ip | default('10.1.254.2') }}"
+    vpn_hostname: "vpn.fleet1.cloud"
     fleet1_lan_infra_dns_records:
       - hostname: opnsense
         domain: fleet1.lan
@@ -137,6 +138,20 @@
         validate_certs: "{{ opnsense_api_verify_ssl }}"
       register: wg_status
       failed_when: wg_status.status == 404
+
+    - name: Ensure os-ddclient plugin is installed
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/core/firmware/install/os-ddclient"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body: {}
+      register: ddclient_install
+      # 400 status likely means it's already installed
+      failed_when: ddclient_install.status not in [200, 400]
 
     - name: Display OPNsense system information
       ansible.builtin.debug:
@@ -675,6 +690,7 @@
       register: dnat_apply_result
       when: not fleet1_lan_dnat_exists or not fleet1_lan_mqtts_dnat_exists
       changed_when: dnat_apply_result.json.status | default('') == 'ok'
+
 
     # ── Wireguard VPN ────────────────────────────────────────────────────────
     - name: Fetch existing Wireguard servers
