@@ -19,6 +19,23 @@ cp group_vars/example.all.yml group_vars/all.yml
 # Edit group_vars/all.yml with your credentials
 ```
 
+## Development Workflow
+
+This project uses a dual-remote strategy (GitHub + Gitea) with automated PR creation and merging.
+
+- **`make pr`**: Pushes the current feature branch to both `origin` (GitHub) and `gitea`, then creates Pull Requests on both platforms.
+- **`make merge`**: Merges the open PRs on both remotes (using `--admin` bypass for GitHub) and runs `make sync`.
+- **`make sync`**: Pulls the latest `main` from GitHub, updates local state, and prunes all merged branches.
+
+## Wireguard VPN
+
+Secure remote access to `fleet1.lan` is provided via Wireguard on the OPNsense router.
+
+1. Install the Wireguard client on your device.
+2. Use the configuration template in `specs/058-wireguard-management-vpn/quickstart.md`.
+3. Activate the tunnel to reach `10.1.1.x` and `10.1.20.x` subnets.
+4. Internal DNS (`fleet1.lan`) is available automatically over the tunnel.
+
 ## Quick Reference
 
 | Category | Playbook | Command |
@@ -65,7 +82,8 @@ playbooks/
 | `servers` | node1, node3, node5 | K3s control-plane + etcd nodes (10.1.20.11, .13, .15) |
 | `agents` | node2, node4, node6 | K3s worker nodes (10.1.20.12, .14, .16) |
 | `cluster` | servers + agents | Full 6-node K3s cluster |
-| `compute` | edge | CM5 Cloudflared device (10.1.10.x) |
+| `compute` | edge | CM5 Cloudflared device (10.1.10.10) |
+| `nvr` | nvr-host | Dedicated Frigate + Hailo-8 host (10.1.10.11) |
 
 OPNsense (10.1.1.1) and unmanaged switches are documented as topology comments in `hosts.ini` — managed via `network-deploy.yml` using the `oxlorg.opnsense` REST API collection.
 
@@ -165,6 +183,7 @@ Not everything in the cluster is ArgoCD-managed. The boundary is defined by **bo
 |------------|-----------|-------------|
 | `static-site` | `manifests/static-site/` | fleet1.cloud landing page |
 | `redirects` | `manifests/redirects/` | Wildcard subdomain → apex redirect |
+| `mosquitto` | `manifests/home-automation/prereqs/mosquitto.yaml` | MQTT broker (LAN-only) |
 | `home-automation-prereqs` | `manifests/home-automation/prereqs/` | Namespace, certs, SealedSecrets, ConfigMaps |
 | `home-automation-apps` | `manifests/home-automation/apps/` | ArgoCD Applications for each HA service |
 
@@ -178,14 +197,8 @@ The rule of thumb: if the cluster can't function or recover without it, it's inf
    gitea_admin_username: admin
    gitea_admin_password: <password>
    gitea_admin_email: <email>
-   argocd_admin_password_bcrypt: <bcrypt-hash>
+   argocd_admin_password_bcrypt: <password-hash>
    gitea_argocd_token: <gitea-pat>
-   ```
-
-   Generate the ArgoCD bcrypt hash:
-
-   ```bash
-   htpasswd -nbBC 10 "" <password> | tr -d ':\n' | sed 's/$2y/$2a/'
    ```
 
 2. Run the full services playbook:

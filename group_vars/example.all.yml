@@ -176,3 +176,19 @@ nvr_cameras: []
 # pki_ca_secret_name: fleet1-lan-ca-secret
 # pki_wildcard_name: fleet1-lan-wildcard-tls
 # pki_wildcard_secret_name: fleet1-lan-wildcard-tls
+
+# ── Wireguard VPN (058-wireguard-management-vpn) ─────────────────────────────
+# Used by: playbooks/network/network-deploy.yml
+# Subnet for VPN clients — MUST NOT conflict with existing VLANs
+wireguard_vpn_subnet: 10.1.254.0/24
+wireguard_vpn_server_ip: 10.1.254.1
+wireguard_vpn_client_ip: 10.1.254.2
+
+# Wireguard Keys — generate using 'wg genkey' and 'wg pubkey'
+# Server Keys
+wireguard_server_private_key: <SERVER_PRIVATE_KEY>
+wireguard_server_public_key: <SERVER_PUBLIC_KEY>
+
+# Management Laptop Keys
+wireguard_client_private_key: <CLIENT_PRIVATE_KEY>
+wireguard_client_public_key: <CLIENT_PUBLIC_KEY>

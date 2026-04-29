@@ -124,6 +124,20 @@
         command: info
       register: opnsense_info
 
+    - name: Ensure os-ddclient plugin is installed
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/core/firmware/install/os-ddclient"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body: {}
+      register: ddclient_install
+      # 400 status likely means it's already installed
+      failed_when: ddclient_install.status not in [200, 400]
+
     - name: Display OPNsense system information
       ansible.builtin.debug:
         msg: "Connected to OPNsense — firmware: {{ opnsense_info.data.product_version | default('unknown') }}"
@@ -519,6 +533,39 @@
           the Unbound service starts successfully.
       when: unbound_status_result.json.status | default('unknown') != 'running'
 
+    - name: Fetch Unbound settings
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/unbound/settings/get"
+        method: GET
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+      register: unbound_settings
+
+    - name: Configure Unbound to listen on all interfaces (including Wireguard)
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/unbound/settings/set"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body:
+          unbound:
+            general:
+              active_interface: "" # Empty means all
+        status_code: [200]
+      register: unbound_listen_result
+      # Check if any specific interface is selected (1). If everything is 0, it already listens on all.
+      when: >
+        unbound_settings.json.unbound.general.active_interface.values()
+        | selectattr('selected', 'equalto', 1)
+        | list
+        | length > 0
+      changed_when: unbound_listen_result.json.result | default('') == 'saved'
+
     # --- Destination NAT: fleet1.lan HTTPS → Traefik NodePort ---
     # Requires OPNsense 26.1+; API path is d_nat (not dnat)
     - name: Fetch existing Destination NAT rules
@@ -628,3 +675,5 @@
       register: dnat_apply_result
       when: not fleet1_lan_dnat_exists or not fleet1_lan_mqtts_dnat_exists
       changed_when: dnat_apply_result.json.status | default('') == 'ok'
+
+
