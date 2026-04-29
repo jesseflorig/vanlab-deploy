@@ -693,6 +693,22 @@
 
 
     # ── Wireguard VPN ────────────────────────────────────────────────────────
+    - name: Ensure Wireguard is enabled globally
+      ansible.builtin.uri:
+        url: "{{ opnsense_api_base }}/wireguard/general/set"
+        method: POST
+        url_username: "{{ opnsense_api_key }}"
+        url_password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_verify_ssl }}"
+        body_format: json
+        body:
+          general:
+            enabled: "1"
+        status_code: [200]
+      register: wg_global_enable
+      changed_when: wg_global_enable.json.result | default('') == 'saved'
+
     - name: Fetch existing Wireguard servers
       ansible.builtin.uri:
         url: "{{ opnsense_api_base }}/wireguard/server/searchServer"
