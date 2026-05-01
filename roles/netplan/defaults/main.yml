@@ -1,0 +1,9 @@
+---
+# roles/netplan/defaults/main.yml
+# Static netplan configuration for all managed nodes.
+# ansible_host (from inventory) is the authoritative static IP.
+
+netplan_interface: eth0
+netplan_prefix_length: "24"
+netplan_nameservers:
+  - 10.1.1.1         # OPNsense Unbound — primary DNS for all lab nodes

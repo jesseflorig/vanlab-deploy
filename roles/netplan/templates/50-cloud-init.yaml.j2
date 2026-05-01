@@ -1,0 +1,18 @@
+# Managed by Ansible — do not edit manually.
+# Source: roles/netplan/templates/50-cloud-init.yaml.j2
+network:
+  version: 2
+  ethernets:
+    {{ netplan_interface }}:
+      dhcp4: false
+      addresses:
+        - {{ ansible_host }}/{{ netplan_prefix_length }}
+      routes:
+        - to: 0.0.0.0/0
+          via: {{ ansible_host | regex_replace('\.\d+$', '.1') }}
+          on-link: true
+      nameservers:
+        addresses:
+{% for ns in netplan_nameservers %}
+          - {{ ns }}
+{% endfor %}

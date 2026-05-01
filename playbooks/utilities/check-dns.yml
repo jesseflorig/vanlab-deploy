@@ -1,14 +1,14 @@
 ---
-- name: Persist DNS on Ubuntu using Netplan
+# playbooks/utilities/check-dns.yml
+# Read-only DNS verification — reports resolver state without modifying netplan.
+# Previously this playbook wrote 90-ansible-dns.yaml with dhcp4: true, which
+# conflicted with the static config in 50-cloud-init.yaml and caused nodes to
+# drop their static IPs on reboot. DNS config is now owned by roles/netplan.
+
+- name: Verify DNS resolver state on cluster nodes
   hosts: cluster
   become: true
   gather_facts: true
-
-  vars:
-    required_dns:
-      - "1.1.1.1"
-      - "8.8.8.8"
-    netplan_file: /etc/netplan/90-ansible-dns.yaml
 
   tasks:
     - name: Ensure this host is Ubuntu
@@ -17,52 +17,9 @@
           - ansible_facts["distribution"] == "Ubuntu"
         fail_msg: "This playbook is intended for Ubuntu hosts only."
 
-    - name: Ensure a default IPv4 interface is available
-      ansible.builtin.assert:
-        that:
-          - ansible_facts["default_ipv4"] is defined
-          - ansible_facts["default_ipv4"]["interface"] is defined
-          - ansible_facts["default_ipv4"]["interface"] | length > 0
-        fail_msg: "Could not determine the primary IPv4 interface from gathered facts."
-
-    - name: Show detected primary interface
-      ansible.builtin.debug:
-        msg: "Using interface {{ ansible_facts['default_ipv4']['interface'] }}"
-
-    - name: Write Netplan DNS override
-      ansible.builtin.copy:
-        dest: "{{ netplan_file }}"
-        owner: root
-        group: root
-        mode: "0600"
-        content: |
-          network:
-            version: 2
-            ethernets:
-              {{ ansible_facts['default_ipv4']['interface'] }}:
-                dhcp4: true
-                nameservers:
-                  addresses:
-          {% for dns in required_dns %}
-                    - {{ dns }}
-          {% endfor %}
-      register: netplan_dns_file
-
-    - name: Validate Netplan configuration
-      ansible.builtin.command: netplan generate
-      changed_when: false
-
-    - name: Apply Netplan changes
-      ansible.builtin.command: netplan apply
-      when: netplan_dns_file.changed
-
-    - name: Wait for resolver state to settle
-      ansible.builtin.pause:
-        seconds: 3
-      when: netplan_dns_file.changed
-
     - name: Read DNS status from resolvectl
-      ansible.builtin.command: resolvectl dns {{ ansible_facts['default_ipv4']['interface'] }}
+      ansible.builtin.command: >
+        resolvectl dns {{ ansible_facts['default_ipv4']['interface'] }}
       register: resolvectl_dns
       changed_when: false
       failed_when: false
@@ -72,18 +29,9 @@
         src: /etc/resolv.conf
       register: resolv_conf
 
-    - name: Show verification output
+    - name: Show DNS verification output
       ansible.builtin.debug:
         msg:
           - "Interface: {{ ansible_facts['default_ipv4']['interface'] }}"
           - "resolvectl: {{ resolvectl_dns.stdout | default('unavailable') }}"
-          - "resolv.conf:"
-          - "{{ resolv_conf.content | b64decode }}"
-
-    - name: Assert required DNS servers are present in resolver state
-      ansible.builtin.assert:
-        that:
-          - "'1.1.1.1' in (resolvectl_dns.stdout | default('') + (resolv_conf.content | b64decode))"
-          - "'8.8.8.8' in (resolvectl_dns.stdout | default('') + (resolv_conf.content | b64decode))"
-        fail_msg: "Required DNS servers were not found after applying Netplan."
-        success_msg: "Required DNS servers are present."
+          - "resolv.conf: {{ resolv_conf.content | b64decode }}"

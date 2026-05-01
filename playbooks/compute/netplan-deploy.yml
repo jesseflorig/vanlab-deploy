@@ -1,0 +1,13 @@
+---
+# playbooks/compute/netplan-deploy.yml
+# Applies static netplan config to all managed compute nodes.
+# Removes the conflicting 90-ansible-dns.yaml (dhcp4: true) that caused
+# static IPs to be dropped on reboot.
+
+- name: Deploy static netplan config to all managed nodes
+  hosts: cluster:compute
+  become: true
+  gather_facts: false
+
+  roles:
+    - netplan
