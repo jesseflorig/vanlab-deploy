@@ -32,10 +32,10 @@
   check_mode: false
 
 - name: Add Tailscale apt repository
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/debian bookworm main"
-    filename: tailscale
-    state: present
+  ansible.builtin.copy:
+    content: "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/debian bookworm main\n"
+    dest: /etc/apt/sources.list.d/tailscale.list
+    mode: "0644"
 
 - name: Download Tailscale {{ tailscale_version }} {{ tailscale_deb_arch }} deb (on controller)
   ansible.builtin.get_url:
@@ -118,24 +118,6 @@
   no_log: true
 
 # ── T012: Disable key expiry ──────────────────────────────────────────────────
-
-- name: Check current key expiry state
-  ansible.builtin.command: tailscale status --json
-  register: tailscale_status_expiry
-  changed_when: false
-  failed_when: false
-
-- name: Set key_expiry_disabled fact
-  ansible.builtin.set_fact:
-    tailscale_key_expiry_disabled: >-
-      {{
-        tailscale_status_expiry.rc == 0
-        and tailscale_status_expiry.stdout | length > 0
-        and (tailscale_status_expiry.stdout | from_json).get('Self', {}).get('KeyExpiry', '')
-            == '0001-01-01T00:00:00Z'
-      }}
-
-- name: Disable Tailscale key expiry
-  ansible.builtin.command: tailscale set --key-expiry-disabled
-  when: not tailscale_key_expiry_disabled and not ansible_check_mode
-  changed_when: not tailscale_key_expiry_disabled
+# NOTE: --key-expiry-disabled was removed from tailscale set/up in v1.76+.
+# Disable key expiry manually per node via the admin console:
+#   https://login.tailscale.com/admin/machines → "..." → "Disable key expiry"
