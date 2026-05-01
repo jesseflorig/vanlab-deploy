@@ -1,0 +1,141 @@
+---
+# roles/tailscale/tasks/main.yml
+# Installs the Tailscale daemon from the official apt repository, enrolls the node
+# in the tailnet using a pre-authorized reusable auth key, enables IP forwarding on
+# subnet router nodes (when tailscale_advertise_routes is set), and disables key expiry
+# so nodes remain connected indefinitely.
+# Idempotent: enrollment is gated on a tailscale status check; all tasks use changed_when.
+# Note: nodes lack outbound HTTPS (server VLAN firewall); packages are downloaded on the
+# Ansible controller and copied to each node.
+
+# ── T007: APT repository and package install ──────────────────────────────────
+
+- name: Set Tailscale deb architecture
+  ansible.builtin.set_fact:
+    tailscale_deb_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+- name: Download Tailscale apt signing key (on controller)
+  ansible.builtin.get_url:
+    url: https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg
+    dest: /tmp/tailscale-archive-keyring.gpg
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  check_mode: false
+
+- name: Copy Tailscale apt signing key to node
+  ansible.builtin.copy:
+    src: /tmp/tailscale-archive-keyring.gpg
+    dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+    mode: "0644"
+  check_mode: false
+
+- name: Add Tailscale apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/debian bookworm main"
+    filename: tailscale
+    state: present
+
+- name: Download Tailscale {{ tailscale_version }} {{ tailscale_deb_arch }} deb (on controller)
+  ansible.builtin.get_url:
+    url: "https://pkgs.tailscale.com/stable/debian/pool/tailscale_{{ tailscale_version }}_{{ tailscale_deb_arch }}.deb"
+    dest: "/tmp/tailscale_{{ tailscale_version }}_{{ tailscale_deb_arch }}.deb"
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+  check_mode: false
+
+- name: Copy Tailscale deb to node
+  ansible.builtin.copy:
+    src: "/tmp/tailscale_{{ tailscale_version }}_{{ tailscale_deb_arch }}.deb"
+    dest: "/tmp/tailscale_{{ tailscale_version }}_{{ tailscale_deb_arch }}.deb"
+    mode: "0644"
+  check_mode: false
+
+- name: Check if tailscale {{ tailscale_version }} is already installed
+  ansible.builtin.command: dpkg-query -W -f='${Version}' tailscale
+  register: tailscale_installed_version
+  changed_when: false
+  failed_when: false
+
+- name: Install tailscale from deb
+  ansible.builtin.apt:
+    deb: "/tmp/tailscale_{{ tailscale_version }}_{{ tailscale_deb_arch }}.deb"
+    state: present
+  when: tailscale_installed_version.rc != 0 or tailscale_installed_version.stdout != tailscale_version
+
+# ── T008: Service ─────────────────────────────────────────────────────────────
+
+- name: Enable and start tailscaled service
+  ansible.builtin.service:
+    name: tailscaled
+    enabled: true
+    state: started
+  ignore_errors: "{{ ansible_check_mode }}"
+
+# ── T009: IP forwarding (subnet router nodes only) ────────────────────────────
+
+- name: Enable IP forwarding for subnet routing
+  ansible.posix.sysctl:
+    name: "{{ item }}"
+    value: "1"
+    sysctl_file: /etc/sysctl.d/99-tailscale.conf
+    reload: true
+  loop:
+    - net.ipv4.ip_forward
+    - net.ipv6.conf.all.forwarding
+  when: tailscale_advertise_routes | length > 0
+
+# ── T010: Enrollment idempotency guard ────────────────────────────────────────
+
+- name: Check Tailscale enrollment status
+  ansible.builtin.command: tailscale status --json
+  register: tailscale_status_raw
+  changed_when: false
+  failed_when: false
+
+- name: Set tailscale_enrolled fact
+  ansible.builtin.set_fact:
+    tailscale_enrolled: >-
+      {{
+        (tailscale_status_raw.stdout | from_json).get('BackendState', 'NeedsLogin') == 'Running'
+        if tailscale_status_raw.rc == 0 and tailscale_status_raw.stdout | length > 0
+        else false
+      }}
+
+# ── T011: Enroll node in tailnet ──────────────────────────────────────────────
+
+- name: Enroll node in tailnet
+  ansible.builtin.command: >
+    tailscale up
+    --auth-key={{ tailscale_auth_key }}
+    --accept-routes={{ tailscale_accept_routes | lower }}
+    --accept-dns={{ tailscale_accept_dns | lower }}
+    {% if tailscale_advertise_routes | length > 0 %}--advertise-routes={{ tailscale_advertise_routes }}{% endif %}
+  when: not tailscale_enrolled and not ansible_check_mode
+  changed_when: not tailscale_enrolled
+  no_log: true
+
+# ── T012: Disable key expiry ──────────────────────────────────────────────────
+
+- name: Check current key expiry state
+  ansible.builtin.command: tailscale status --json
+  register: tailscale_status_expiry
+  changed_when: false
+  failed_when: false
+
+- name: Set key_expiry_disabled fact
+  ansible.builtin.set_fact:
+    tailscale_key_expiry_disabled: >-
+      {{
+        tailscale_status_expiry.rc == 0
+        and tailscale_status_expiry.stdout | length > 0
+        and (tailscale_status_expiry.stdout | from_json).get('Self', {}).get('KeyExpiry', '')
+            == '0001-01-01T00:00:00Z'
+      }}
+
+- name: Disable Tailscale key expiry
+  ansible.builtin.command: tailscale set --key-expiry-disabled
+  when: not tailscale_key_expiry_disabled and not ansible_check_mode
+  changed_when: not tailscale_key_expiry_disabled

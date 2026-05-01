@@ -1,0 +1,21 @@
+---
+# Device CA Certificate — self-signed root CA used exclusively for device client cert auth.
+# Isolated from fleet1-lan-ca (server TLS) to allow independent lifecycle management.
+# Private key stays in cluster; never committed to Git.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: "{{ device_mtls_ca_name }}"
+  namespace: "{{ device_mtls_ca_namespace }}"
+spec:
+  isCA: true
+  commonName: "{{ device_mtls_ca_name }}"
+  secretName: "{{ device_mtls_ca_secret_name }}"
+  privateKey:
+    algorithm: RSA
+    size: 4096
+  duration: "{{ device_mtls_ca_duration }}"
+  renewBefore: "{{ device_mtls_ca_renew_before }}"
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer

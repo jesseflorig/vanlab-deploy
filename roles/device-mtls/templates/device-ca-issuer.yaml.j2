@@ -1,0 +1,10 @@
+---
+# Device CA ClusterIssuer — signs client certificates for managed devices.
+# Must be applied after device-ca-cert.yaml.j2 Certificate is Ready.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: "{{ device_mtls_ca_name }}-issuer"
+spec:
+  ca:
+    secretName: "{{ device_mtls_ca_secret_name }}"

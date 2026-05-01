@@ -1,0 +1,10 @@
+---
+# roles/tailscale/defaults/main.yml
+# Tailscale mesh VPN daemon — installation and enrollment defaults.
+# No secrets here; tailscale_auth_key must be set in group_vars/all.yml (vault-encrypted).
+
+tailscale_auth_key: ""           # REQUIRED — set in group_vars/all.yml
+tailscale_advertise_routes: ""   # CSV of CIDRs to advertise as subnet routes; empty = no advertising
+tailscale_accept_routes: true    # Accept routes advertised by other subnet routers in the tailnet
+tailscale_accept_dns: false      # Never override system DNS on nodes; nodes use OPNsense Unbound
+tailscale_version: "1.96.4"      # Pin version; update manually when upgrading

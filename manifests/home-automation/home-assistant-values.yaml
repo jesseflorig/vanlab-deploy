@@ -43,10 +43,7 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-    - host: hass.fleet1.lan
-      paths:
-        - path: /
-          pathType: Prefix
+  # hass.fleet1.lan moved to manifests/home-automation/fleet1-lan-ingressroutes.yaml (mTLS)
 
 env:
   - name: TZ

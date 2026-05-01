@@ -38,10 +38,7 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-    - host: "gitea.fleet1.lan"
-      paths:
-        - path: /
-          pathType: Prefix
+  # gitea.fleet1.lan moved to manifests/gitea/fleet1-lan-ingressroute.yaml (mTLS enforcement)
 
 service:
   http:

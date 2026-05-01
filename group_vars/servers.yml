@@ -1,0 +1,7 @@
+---
+# group_vars/servers.yml
+# Variables that apply only to K3s server nodes (node1, node3, node5).
+# Server nodes act as Tailscale subnet routers, advertising all six lab subnets
+# so that the management laptop can reach any LAN host when connected via Tailscale.
+
+tailscale_advertise_routes: "10.1.1.0/24,10.1.10.0/24,10.1.20.0/24,10.1.30.0/24,10.1.40.0/24,10.1.50.0/24"

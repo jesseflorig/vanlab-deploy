@@ -12,3 +12,5 @@ Thumbs.db
 ha-frigate-config.txt
 *.key
 *.crt
+*.pem
+*.p12
