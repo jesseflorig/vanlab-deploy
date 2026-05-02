@@ -67,6 +67,23 @@
 
 # ── T008: Service ─────────────────────────────────────────────────────────────
 
+- name: Ensure tailscaled drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/tailscaled.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install tailscaled systemd drop-in for network ordering
+  ansible.builtin.copy:
+    src: tailscaled-network-order.conf
+    dest: /etc/systemd/system/tailscaled.service.d/network-order.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
 - name: Enable and start tailscaled service
   ansible.builtin.service:
     name: tailscaled
