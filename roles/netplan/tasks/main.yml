@@ -4,6 +4,11 @@
 # different filename so cloud-init never overwrites it) with dhcp4: false and the
 # node's static IP from inventory. Also removes the old conflicting files.
 
+- name: Assert netplan_address is set
+  ansible.builtin.assert:
+    that: netplan_address | length > 0
+    fail_msg: "netplan_address must be set for {{ inventory_hostname }} in hosts.ini"
+
 - name: Write static netplan config
   ansible.builtin.template:
     src: 60-ansible-static.yaml.j2
