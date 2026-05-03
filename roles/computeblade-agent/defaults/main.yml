@@ -1,0 +1,35 @@
+---
+# roles/computeblade-agent/defaults/main.yml
+# compute-blade-agent (community fork of the Uptime Lab original)
+# GitHub: compute-blade-community/compute-blade-agent
+
+computeblade_agent_version: "0.11.2"   # pin; bump manually when upgrading
+
+# LED colors (0-255 each channel)
+computeblade_agent_idle_led:
+  red: 0
+  green: 16
+  blue: 0
+
+computeblade_agent_identify_led:
+  red: 16
+  green: 0
+  blue: 16
+
+computeblade_agent_critical_led:
+  red: 64
+  green: 0
+  blue: 0
+
+computeblade_agent_stealth_mode: false  # true = all LEDs off
+
+# Fan curve — temperature (°C) → speed (%)
+computeblade_agent_fan_steps:
+  - temperature: 45
+    percent: 40
+  - temperature: 55
+    percent: 80
+
+computeblade_agent_critical_temp: 60   # °C — triggers 100% fan + red LED
+
+computeblade_agent_metrics_port: "9666"  # Prometheus scrape port

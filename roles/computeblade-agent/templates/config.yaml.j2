@@ -1,0 +1,37 @@
+# /etc/compute-blade-agent/config.yaml
+# Managed by Ansible — do not edit manually.
+
+listen:
+  metrics: ":{{ computeblade_agent_metrics_port }}"
+  grpc: /tmp/compute-blade-agent.sock
+  authenticated: false
+  mode: unix
+
+hal:
+  rpm_reporting_standard_fan_unit: true
+
+idle_led_color:
+  red: {{ computeblade_agent_idle_led.red }}
+  green: {{ computeblade_agent_idle_led.green }}
+  blue: {{ computeblade_agent_idle_led.blue }}
+
+identify_led_color:
+  red: {{ computeblade_agent_identify_led.red }}
+  green: {{ computeblade_agent_identify_led.green }}
+  blue: {{ computeblade_agent_identify_led.blue }}
+
+criticalLedColor:
+  red: {{ computeblade_agent_critical_led.red }}
+  green: {{ computeblade_agent_critical_led.green }}
+  blue: {{ computeblade_agent_critical_led.blue }}
+
+stealth_mode: {{ computeblade_agent_stealth_mode | lower }}
+
+fan_controller:
+  steps:
+{% for step in computeblade_agent_fan_steps %}
+    - temperature: {{ step.temperature }}
+      percent: {{ step.percent }}
+{% endfor %}
+
+critical_temperature_threshold: {{ computeblade_agent_critical_temp }}

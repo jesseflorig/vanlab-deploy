@@ -1,0 +1,12 @@
+---
+- name: Restart compute-blade-agent
+  ansible.builtin.service:
+    name: compute-blade-agent
+    state: restarted
+  ignore_errors: "{{ ansible_check_mode }}"
+
+- name: Reboot for config.txt changes
+  ansible.builtin.reboot:
+    reboot_timeout: 120
+    msg: "Rebooting to apply /boot/firmware/config.txt UART overlay change"
+  ignore_errors: "{{ ansible_check_mode }}"

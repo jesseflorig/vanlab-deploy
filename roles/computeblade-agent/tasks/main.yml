@@ -1,0 +1,78 @@
+---
+# roles/computeblade-agent/tasks/main.yml
+# Installs compute-blade-agent on Computeblade CM5 nodes.
+# Controls onboard LEDs (WS281x via RP1 GPIO 18) and the Smart Fan Unit
+# (UART4 on BCM2712). Also fixes the [cm5] block in /boot/firmware/config.txt
+# to use dtoverlay=uart4 instead of uart5 — a reboot is required for fan
+# UART to become active. LEDs work immediately after service start.
+# Package is downloaded on the Ansible controller and copied to each node
+# (nodes lack outbound HTTPS to GitHub).
+
+# ── Package install ───────────────────────────────────────────────────────────
+
+- name: Download compute-blade-agent {{ computeblade_agent_version }} deb (on controller)
+  ansible.builtin.get_url:
+    url: "https://github.com/compute-blade-community/compute-blade-agent/releases/download/\
+          v{{ computeblade_agent_version }}/\
+          compute-blade-agent_{{ computeblade_agent_version }}_linux_arm64.deb"
+    dest: "/tmp/compute-blade-agent_{{ computeblade_agent_version }}_linux_arm64.deb"
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  check_mode: false
+
+- name: Copy compute-blade-agent deb to node
+  ansible.builtin.copy:
+    src: "/tmp/compute-blade-agent_{{ computeblade_agent_version }}_linux_arm64.deb"
+    dest: "/tmp/compute-blade-agent_{{ computeblade_agent_version }}_linux_arm64.deb"
+    mode: "0644"
+  check_mode: false
+
+- name: Check installed compute-blade-agent version
+  ansible.builtin.command: dpkg-query -W -f='${Version}' compute-blade-agent
+  register: computeblade_installed_version
+  changed_when: false
+  failed_when: false
+
+- name: Install compute-blade-agent {{ computeblade_agent_version }}
+  ansible.builtin.apt:
+    deb: "/tmp/compute-blade-agent_{{ computeblade_agent_version }}_linux_arm64.deb"
+    state: present
+  when: >
+    computeblade_installed_version.rc != 0 or
+    computeblade_installed_version.stdout != computeblade_agent_version
+  notify: Restart compute-blade-agent
+
+# ── Agent config ──────────────────────────────────────────────────────────────
+
+- name: Deploy compute-blade-agent config
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/compute-blade-agent/config.yaml
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart compute-blade-agent
+
+# ── config.txt: fix CM5 UART overlay (uart5 → uart4) ─────────────────────────
+# BCM2712 Smart Fan Unit UART is ttyAMA4 (RP1 UART4), not ttyAMA5.
+# config.txt uses RPi conditional blocks ([cm4], [cm5]) applied at boot based
+# on detected hardware. The [cm5] block was shipped with uart5 (correct for
+# CM4/BCM2711 pin mapping) but wrong for BCM2712 — replace targets [cm5] only.
+
+- name: Fix [cm5] UART overlay in /boot/firmware/config.txt (uart5 → uart4)
+  ansible.builtin.replace:
+    path: /boot/firmware/config.txt
+    regexp: '(?s)(\[cm5\][^\[]*?)dtoverlay=uart5'
+    replace: '\1dtoverlay=uart4'
+  notify: Reboot for config.txt changes
+
+# ── Service ───────────────────────────────────────────────────────────────────
+
+- name: Enable and start compute-blade-agent
+  ansible.builtin.service:
+    name: compute-blade-agent
+    enabled: true
+    state: started
+  ignore_errors: "{{ ansible_check_mode }}"
