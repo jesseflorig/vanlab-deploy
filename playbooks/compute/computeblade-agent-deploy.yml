@@ -1,0 +1,17 @@
+---
+# playbooks/compute/computeblade-agent-deploy.yml
+# Deploys compute-blade-agent to all Computeblade CM5 cluster nodes.
+# Controls onboard LEDs and Smart Fan Unit (thermal management).
+# Exposes Prometheus metrics on port 9666.
+#
+# On first run this will reboot nodes to apply the uart4 overlay fix.
+# Nodes are rebooted one at a time (serial: 1) to keep the cluster available.
+
+- name: Deploy compute-blade-agent to cluster nodes
+  hosts: "{{ target_hosts | default('cluster') }}"
+  become: true
+  gather_facts: false
+  serial: 1
+
+  roles:
+    - computeblade-agent
