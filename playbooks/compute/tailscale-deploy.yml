@@ -1,0 +1,27 @@
+---
+# playbooks/compute/tailscale-deploy.yml
+# Installs and enrolls Tailscale on all managed nodes (cluster, compute, nvr).
+# Server nodes (node1, node3, node5) additionally advertise all six lab subnets
+# as Tailscale subnet routes — see group_vars/servers.yml.
+#
+# REQUIRED MANUAL STEPS AFTER THIS PLAYBOOK:
+#   Step 4: Approve advertised subnet routes for node1, node3, node5
+#           → https://login.tailscale.com/admin/machines (Edit route settings per node)
+#   Step 5: Configure fleet1.lan split-DNS
+#           → https://login.tailscale.com/admin/dns
+#           → Add nameserver: Custom → 10.1.1.1 → Restrict to domain: fleet1.lan
+#
+# See full runbook: specs/059-tailscale-remote-access/quickstart.md
+
+- name: Deploy Tailscale to all managed nodes
+  hosts: cluster,compute,nvr
+  become: true
+  pre_tasks:
+    - name: Assert tailscale_auth_key is defined
+      ansible.builtin.assert:
+        that:
+          - tailscale_auth_key is defined
+          - tailscale_auth_key | length > 0
+        fail_msg: "tailscale_auth_key must be set in group_vars/all.yml (vault-encrypted)"
+  roles:
+    - tailscale

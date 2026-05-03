@@ -20,7 +20,7 @@ prometheus:
       traefik.ingress.kubernetes.io/router.tls: "true"
     hosts:
       - "{{ prometheus_hostname }}"
-      - "prometheus.fleet1.lan"
+      # prometheus.fleet1.lan moved to manifests/monitoring/fleet1-lan-ingressroutes.yaml (mTLS)
 
 alertmanager:
   alertmanagerSpec:
@@ -55,7 +55,7 @@ grafana:
       traefik.ingress.kubernetes.io/router.tls: "true"
     hosts:
       - "{{ grafana_hostname }}"
-      - "grafana.fleet1.lan"
+      # grafana.fleet1.lan moved to manifests/monitoring/fleet1-lan-ingressroutes.yaml (mTLS)
   dashboards:
     default:
       longhorn:

@@ -7,7 +7,7 @@
 
 - name: Add Cloudflare apt repository
   ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared bookworm main"
+    repo: "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared {{ ansible_distribution_release }} main"
     state: present
     filename: cloudflared
 
@@ -54,7 +54,7 @@
 
       [Service]
       Type=simple
-      ExecStart=/usr/bin/cloudflared tunnel --config /etc/cloudflared/config.yml run --token-file {{ cloudflared_token_path }}
+      ExecStart={{ cloudflared_bin }} tunnel --config /etc/cloudflared/config.yml run --token-file {{ cloudflared_token_path }}
       Restart=on-failure
       RestartSec=5s
 

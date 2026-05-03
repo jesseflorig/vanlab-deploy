@@ -1,0 +1,28 @@
+---
+# playbooks/cluster/device-mtls-deploy.yml
+# Deploys Device CA cert-manager resources and Traefik TLSOption for mTLS client
+# certificate enforcement on fleet1.lan IngressRoutes.
+#
+# Prerequisites:
+#   - cert-manager must be running (deployed via services-deploy.yml)
+#   - selfsigned-issuer ClusterIssuer must exist (deployed via services-deploy.yml → pki role)
+#   - Traefik must be running in the traefik namespace
+#
+# After this playbook:
+#   - Run scripts/export-device-cert.sh to export the laptop client cert
+#   - Install the .p12 bundle in your OS keychain (see quickstart.md Steps 7–8)
+
+- name: Deploy device mTLS infrastructure
+  hosts: servers
+  become: true
+  pre_tasks:
+    - name: Assert cert-manager is running
+      ansible.builtin.shell: kubectl get pods -n cert-manager --field-selector=status.phase=Running --no-headers | wc -l
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: cm_running
+      changed_when: false
+      failed_when: cm_running.stdout | int < 1
+      run_once: true
+  roles:
+    - device-mtls

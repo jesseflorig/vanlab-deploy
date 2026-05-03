@@ -1,0 +1,6 @@
+---
+# Remote access: NVR connections proxy through edge (Tailscale IP).
+ansible_ssh_common_args: >-
+  -o ProxyJump=fleetadmin@10.1.10.10
+  -o StrictHostKeyChecking=no
+  -o UserKnownHostsFile=/dev/null

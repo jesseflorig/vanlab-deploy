@@ -1,0 +1,39 @@
+---
+# playbooks/edge/nm-static-deploy.yml
+# Manages the NetworkManager static IP connection profile on edge (Debian 13).
+# Edge does not use netplan — NM owns eth0 directly.
+
+- name: Configure static IP via NetworkManager on edge
+  hosts: edge_hosts
+  become: true
+  gather_facts: false
+
+  vars:
+    nm_conn_name: "Wired connection 1"
+    nm_conn_file: "/etc/NetworkManager/system-connections/Wired connection 1.nmconnection"
+
+  tasks:
+    - name: Set static IPv4 DNS to OPNsense Unbound
+      ansible.builtin.ini_file:
+        path: "{{ nm_conn_file }}"
+        section: ipv4
+        option: dns
+        value: "10.1.1.1;"
+        mode: "0600"
+      notify: Reload NM connection
+
+    - name: Ensure IPv6 is disabled (server node — not needed)
+      ansible.builtin.ini_file:
+        path: "{{ nm_conn_file }}"
+        section: ipv6
+        option: method
+        value: disabled
+        mode: "0600"
+      notify: Reload NM connection
+
+  handlers:
+    - name: Reload NM connection
+      ansible.builtin.shell: |
+        nmcli con reload
+        nmcli con up "{{ nm_conn_name }}"
+      changed_when: true

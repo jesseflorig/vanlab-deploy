@@ -177,6 +177,14 @@ nvr_cameras: []
 # pki_wildcard_name: fleet1-lan-wildcard-tls
 # pki_wildcard_secret_name: fleet1-lan-wildcard-tls
 
+# ── Tailscale Remote Access (059-tailscale-remote-access) ────────────────────
+# Used by: playbooks/compute/tailscale-deploy.yml → tailscale role
+# Generate a reusable pre-authorized auth key at: login.tailscale.com/admin/settings/keys
+# Settings: Reusable ✅, Pre-authorized ✅, Ephemeral ❌
+# Store the real value vault-encrypted in group_vars/all.yml:
+#   ansible-vault encrypt_string '<key>' --name 'tailscale_auth_key'
+tailscale_auth_key: "<REPLACE_WITH_TAILSCALE_AUTH_KEY>"
+
 # ── Wireguard VPN (058-wireguard-management-vpn) ─────────────────────────────
 # Used by: playbooks/network/network-deploy.yml
 # Subnet for VPN clients — MUST NOT conflict with existing VLANs

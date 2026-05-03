@@ -1,0 +1,138 @@
+---
+# roles/device-mtls/tasks/main.yml
+# Creates a dedicated Device CA via cert-manager (isolated from the fleet1-lan-ca server TLS CA),
+# issues a client certificate for the management laptop from that CA, extracts the CA public cert
+# into an Opaque Secret for Traefik, and applies a TLSOption requiring client cert verification
+# on all fleet1.lan IngressRoute resources.
+# All kubectl tasks use run_once: true; temp files are cleaned up in an always: block.
+
+- block:
+
+    - name: Render Device CA Certificate manifest
+      ansible.builtin.template:
+        src: device-ca-cert.yaml.j2
+        dest: /tmp/device-ca-cert.yaml
+        mode: "0644"
+      run_once: true
+
+    - name: Apply Device CA Certificate
+      ansible.builtin.command: kubectl apply -f /tmp/device-ca-cert.yaml
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: device_ca_cert_result
+      changed_when: "'created' in device_ca_cert_result.stdout or 'configured' in device_ca_cert_result.stdout"
+      run_once: true
+
+    - name: Wait for Device CA Certificate to be Ready
+      ansible.builtin.command: >
+        kubectl wait certificate/{{ device_mtls_ca_name }}
+        -n {{ device_mtls_ca_namespace }}
+        --for=condition=Ready
+        --timeout=60s
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      changed_when: false
+      run_once: true
+
+    - name: Render Device CA ClusterIssuer manifest
+      ansible.builtin.template:
+        src: device-ca-issuer.yaml.j2
+        dest: /tmp/device-ca-issuer.yaml
+        mode: "0644"
+      run_once: true
+
+    - name: Apply Device CA ClusterIssuer
+      ansible.builtin.command: kubectl apply -f /tmp/device-ca-issuer.yaml
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: device_ca_issuer_result
+      changed_when: "'created' in device_ca_issuer_result.stdout or 'configured' in device_ca_issuer_result.stdout"
+      retries: 5
+      delay: 5
+      until: device_ca_issuer_result.rc == 0
+      run_once: true
+
+    - name: Render laptop client Certificate manifest
+      ansible.builtin.template:
+        src: device-client-cert.yaml.j2
+        dest: /tmp/device-client-cert.yaml
+        mode: "0644"
+      run_once: true
+
+    - name: Apply laptop client Certificate
+      ansible.builtin.command: kubectl apply -f /tmp/device-client-cert.yaml
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: device_client_cert_result
+      changed_when: "'created' in device_client_cert_result.stdout or 'configured' in device_client_cert_result.stdout"
+      run_once: true
+
+    - name: Wait for laptop client Certificate to be Ready
+      ansible.builtin.command: >
+        kubectl wait certificate/{{ device_mtls_client_cert_name }}
+        -n {{ device_mtls_ca_namespace }}
+        --for=condition=Ready
+        --timeout=60s
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      changed_when: false
+      run_once: true
+
+    - name: Ensure Traefik namespace exists
+      ansible.builtin.shell: |
+        kubectl create namespace {{ device_mtls_traefik_namespace }} --dry-run=client -o yaml | kubectl apply -f -
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: traefik_ns_result
+      changed_when: "'created' in traefik_ns_result.stdout"
+      run_once: true
+
+    - name: Extract Device CA public certificate (base64-encoded from Secret)
+      ansible.builtin.command: >
+        kubectl get secret {{ device_mtls_ca_secret_name }}
+        -n {{ device_mtls_ca_namespace }}
+        -o jsonpath='{.data.tls\.crt}'
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: device_ca_cert_b64
+      changed_when: false
+      run_once: true
+
+    - name: Create device-ca-public Secret in Traefik namespace (CA cert only, no private key)
+      ansible.builtin.shell: |
+        kubectl create secret generic {{ device_mtls_ca_public_secret_name }} \
+          --from-literal=ca.crt="$(echo '{{ device_ca_cert_b64.stdout }}' | base64 -d)" \
+          -n {{ device_mtls_traefik_namespace }} \
+          --dry-run=client -o yaml | kubectl apply -f -
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: ca_public_secret_result
+      changed_when: "'created' in ca_public_secret_result.stdout or 'configured' in ca_public_secret_result.stdout"
+      run_once: true
+
+    - name: Render Traefik TLSOption manifest
+      ansible.builtin.template:
+        src: device-tls-option.yaml.j2
+        dest: /tmp/device-tls-option.yaml
+        mode: "0644"
+      run_once: true
+
+    - name: Apply Traefik TLSOption
+      ansible.builtin.command: kubectl apply -f /tmp/device-tls-option.yaml
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: tls_option_result
+      changed_when: "'created' in tls_option_result.stdout or 'configured' in tls_option_result.stdout"
+      run_once: true
+
+  always:
+    - name: Remove temp manifest files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/device-ca-cert.yaml
+        - /tmp/device-ca-issuer.yaml
+        - /tmp/device-client-cert.yaml
+        - /tmp/device-tls-option.yaml
+      run_once: true

@@ -1,0 +1,19 @@
+---
+# Laptop client certificate — issued by device-ca-issuer, used for mTLS authentication
+# against Traefik fleet1.lan IngressRoutes. Export the resulting Secret to the management
+# laptop using scripts/export-device-cert.sh.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: "{{ device_mtls_client_cert_name }}"
+  namespace: "{{ device_mtls_ca_namespace }}"
+spec:
+  commonName: management-laptop
+  secretName: "{{ device_mtls_client_cert_name }}-tls"
+  usages:
+    - client auth
+  duration: "{{ device_mtls_client_cert_duration }}"
+  renewBefore: "{{ device_mtls_client_cert_renew_before }}"
+  issuerRef:
+    name: "{{ device_mtls_ca_name }}-issuer"
+    kind: ClusterIssuer

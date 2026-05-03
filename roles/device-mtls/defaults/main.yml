@@ -1,0 +1,22 @@
+---
+# roles/device-mtls/defaults/main.yml
+# Device CA and mTLS infrastructure — cert-manager CA, client certificate for the
+# management laptop, and Traefik TLSOption for per-route client cert enforcement.
+# No secrets required — all PKI lifecycle managed by cert-manager in-cluster.
+
+# Device CA cert-manager Certificate
+device_mtls_ca_name: device-ca
+device_mtls_ca_namespace: cert-manager
+device_mtls_ca_secret_name: device-ca-tls
+device_mtls_ca_duration: "87600h"     # 10 years — rotation is a deliberate manual operation
+device_mtls_ca_renew_before: "720h"   # 30 days
+
+# Laptop client certificate
+device_mtls_client_cert_name: laptop-client-cert
+device_mtls_client_cert_duration: "8760h"    # 1 year
+device_mtls_client_cert_renew_before: "720h" # 30 days before expiry
+
+# Traefik mTLS resources (in the traefik namespace where TLSOption must live)
+device_mtls_traefik_namespace: traefik
+device_mtls_tls_option_name: device-mtls
+device_mtls_ca_public_secret_name: device-ca-public

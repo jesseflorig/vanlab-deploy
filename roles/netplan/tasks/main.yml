@@ -1,0 +1,56 @@
+---
+# roles/netplan/tasks/main.yml
+# Writes 60-ansible-static.yaml (higher priority than cloud-init's 50-cloud-init.yaml,
+# different filename so cloud-init never overwrites it) with dhcp4: false and the
+# node's static IP from inventory. Also removes the old conflicting files.
+
+- name: Write static netplan config
+  ansible.builtin.template:
+    src: 60-ansible-static.yaml.j2
+    dest: /etc/netplan/60-ansible-static.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  register: netplan_config
+
+- name: Remove cloud-init-owned netplan file
+  ansible.builtin.file:
+    path: /etc/netplan/50-cloud-init.yaml
+    state: absent
+  register: netplan_cloudinit_removed
+
+- name: Remove conflicting 90-ansible-dns.yaml
+  ansible.builtin.file:
+    path: /etc/netplan/90-ansible-dns.yaml
+    state: absent
+  register: netplan_dns_removed
+
+- name: Remove legacy NetworkManager catch-all
+  ansible.builtin.file:
+    path: /etc/netplan/01-network-manager-all.yaml
+    state: absent
+  register: netplan_nm_removed
+
+- name: Remove legacy 99-static-ip.yaml
+  ansible.builtin.file:
+    path: /etc/netplan/99-static-ip.yaml
+    state: absent
+  register: netplan_static_removed
+
+- name: Disable cloud-init network management
+  ansible.builtin.copy:
+    content: "network: {config: disabled}\n"
+    dest: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Apply netplan
+  ansible.builtin.command: netplan apply
+  when: >
+    netplan_config.changed or
+    netplan_cloudinit_removed.changed or
+    netplan_dns_removed.changed or
+    netplan_nm_removed.changed or
+    netplan_static_removed.changed
+  changed_when: true

@@ -1,0 +1,64 @@
+---
+# playbooks/compute/tailscale-remove.yml
+# Removes Tailscale from cluster nodes. Edge and management laptop remain enrolled.
+# Does NOT touch the netplan config — 60-ansible-static.yaml stays in place.
+
+- name: Remove Tailscale from cluster nodes
+  hosts: "{{ target_hosts | default('cluster') }}"
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Stop and disable tailscaled service
+      ansible.builtin.service:
+        name: tailscaled
+        enabled: false
+        state: stopped
+      failed_when: false
+
+    - name: Remove tailscale package
+      ansible.builtin.apt:
+        name: tailscale
+        state: absent
+        purge: true
+
+    - name: Remove tailscaled systemd drop-in
+      ansible.builtin.file:
+        path: /etc/systemd/system/tailscaled.service.d
+        state: absent
+      notify: Reload systemd
+
+    - name: Remove tailscale apt source
+      ansible.builtin.file:
+        path: /etc/apt/sources.list.d/tailscale.list
+        state: absent
+
+    - name: Remove tailscale apt signing key
+      ansible.builtin.file:
+        path: /usr/share/keyrings/tailscale-archive-keyring.gpg
+        state: absent
+
+    - name: Remove tailscale sysctl config (server nodes only)
+      ansible.builtin.file:
+        path: /etc/sysctl.d/99-tailscale.conf
+        state: absent
+      when: tailscale_advertise_routes | default('') | length > 0
+      notify: Reload sysctl
+
+    - name: Remove tailscale state directory
+      ansible.builtin.file:
+        path: /var/lib/tailscale
+        state: absent
+
+    - name: Remove cached tailscale debs
+      ansible.builtin.shell: rm -f /tmp/tailscale_*.deb
+      changed_when: false
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Reload sysctl
+      ansible.builtin.command: sysctl --system
+      changed_when: false

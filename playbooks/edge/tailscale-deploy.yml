@@ -1,0 +1,23 @@
+---
+# playbooks/edge/tailscale-deploy.yml
+# Deploys Tailscale to edge (Debian 13 + NetworkManager).
+# Edge is the only node on the tailnet — cluster nodes use edge as a bastion via ProxyJump.
+#
+# Pre-requisites:
+#   - Static IP configured via nm-static-deploy.yml
+#   - Auth key set in group_vars/all.yml (vault-encrypted)
+#   - New auth key generated at https://login.tailscale.com/admin/settings/keys
+#     (reusable: false, expiry: disabled)
+#
+# Post-deploy verification:
+#   1. ip addr show eth0       → must show 10.1.10.10
+#   2. tailscale status        → must show edge as connected
+#   3. Reboot, then repeat 1+2
+
+- name: Deploy Tailscale to edge
+  hosts: edge_hosts
+  become: true
+  gather_facts: true
+
+  roles:
+    - tailscale

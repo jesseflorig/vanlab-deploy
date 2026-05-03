@@ -1,0 +1,14 @@
+---
+# Traefik TLSOption — requires client certificate signed by the Device CA.
+# Referenced by fleet1.lan IngressRoute resources via: tls.options: device-mtls@traefik
+# Applies only to IngressRoutes that explicitly reference it; fleet1.cloud routes are unaffected.
+apiVersion: traefik.io/v1alpha1
+kind: TLSOption
+metadata:
+  name: "{{ device_mtls_tls_option_name }}"
+  namespace: "{{ device_mtls_traefik_namespace }}"
+spec:
+  clientAuth:
+    secretNames:
+      - "{{ device_mtls_ca_public_secret_name }}"
+    clientAuthType: RequireAndVerifyClientCert

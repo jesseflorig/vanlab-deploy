@@ -1,0 +1,57 @@
+---
+# playbooks/edge/ssh-config-deploy.yml
+# Deploys an SSH client config to edge so fleetadmin can ssh <hostname>
+# directly to all lab hosts without specifying IPs or keys.
+
+- name: Deploy SSH client config to edge
+  hosts: edge_hosts
+  become: false
+  gather_facts: false
+
+  vars:
+    ssh_config: |
+      # --- Cluster nodes ---
+      Host node1 node2 node3 node4 node5 node6
+        User fleetadmin
+        IdentityFile ~/.ssh/id_ed25519
+        StrictHostKeyChecking accept-new
+
+      Host node1
+        HostName 10.1.20.11
+      Host node2
+        HostName 10.1.20.12
+      Host node3
+        HostName 10.1.20.13
+      Host node4
+        HostName 10.1.20.14
+      Host node5
+        HostName 10.1.20.15
+      Host node6
+        HostName 10.1.20.16
+
+      # --- NVR ---
+      Host nvr
+        HostName 10.1.10.11
+        User fleetadmin
+        IdentityFile ~/.ssh/id_ed25519
+        StrictHostKeyChecking accept-new
+
+      # --- Network infrastructure ---
+      Host opnsense
+        HostName 10.1.1.1
+        User fleetadmin
+        IdentityFile ~/.ssh/id_ed25519
+        StrictHostKeyChecking accept-new
+
+  tasks:
+    - name: Ensure .ssh directory exists
+      ansible.builtin.file:
+        path: ~/.ssh
+        state: directory
+        mode: "0700"
+
+    - name: Deploy SSH client config
+      ansible.builtin.copy:
+        content: "{{ ssh_config }}"
+        dest: ~/.ssh/config
+        mode: "0600"

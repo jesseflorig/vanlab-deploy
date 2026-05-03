@@ -23,10 +23,7 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-    - host: node-red.fleet1.lan
-      paths:
-        - path: /
-          pathType: Prefix
+  # node-red.fleet1.lan moved to manifests/home-automation/fleet1-lan-ingressroutes.yaml (mTLS)
 
 env:
   - name: NODE_RED_CREDENTIAL_SECRET
