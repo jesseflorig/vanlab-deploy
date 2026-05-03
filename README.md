@@ -27,30 +27,51 @@ This project uses a dual-remote strategy (GitHub + Gitea) with automated PR crea
 - **`make merge`**: Merges the open PRs on both remotes (using `--admin` bypass for GitHub) and runs `make sync`.
 - **`make sync`**: Pulls the latest `main` from GitHub, updates local state, and prunes all merged branches.
 
-## Remote Access (Tailscale)
+## Remote Access
 
-Secure remote access to `fleet1.lan` is provided via Tailscale mesh VPN. All 6 lab subnets route through the tailnet; `fleet1.lan` DNS resolves automatically via split-DNS. Fleet1.lan services require a device client cert (mTLS) enforced by Traefik.
+Remote access uses a two-layer approach:
 
-**First-time setup**: Follow `specs/059-tailscale-remote-access/quickstart.md` (Steps 1–11).
+- **Tailscale** — only `edge` and the management laptop are enrolled. Provides a persistent, authenticated tunnel into the lab from anywhere.
+- **SSH ProxyJump** — cluster nodes and NVR are accessed by jumping through edge. No Tailscale on cluster nodes avoids boot-time network conflicts.
 
-**Day-to-day**: Install Tailscale on your laptop, log in with the lab account, and connect — all `fleet1.lan` hostnames work immediately. Your browser must present the device cert (installed during setup) to access any `fleet1.lan` service.
+**Day-to-day (off-LAN)**:
+```bash
+ssh edge-ts          # hop onto edge via Tailscale
+ssh node1            # from edge, direct to any cluster node
+```
+
+Or from the management laptop directly (SSH config handles the hops automatically):
+```bash
+ssh node1            # laptop → edge (Tailscale) → node1
+```
+
+**Tailscale IPs**: Run `tailscale status` on any enrolled device to get current IPs.
+
+**Re-deploying Tailscale on edge**:
+```bash
+ansible-playbook -i hosts.ini playbooks/edge/tailscale-deploy.yml --vault-password-file=<(cat ~/.vault_pass)
+```
+Generate a new auth key at `https://login.tailscale.com/admin/settings/keys` if re-enrolling.
 
 ## Quick Reference
 
 | Category | Playbook | Command |
 |----------|----------|---------|
-| Cluster | Deploy K3s | `ansible-playbook -i hosts.ini playbooks/cluster/k3s-deploy.yml --ask-become-pass` |
-| Cluster | Deploy Services | `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --ask-become-pass` |
-| Cluster | Deploy Loki only | `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags loki --ask-become-pass` |
-| Cluster | Deploy Alloy only | `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags alloy --ask-become-pass` |
-| Cluster | Sealed Secrets only | `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags sealed-secrets --ask-become-pass` |
-| Cluster | ArgoCD bootstrap | `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags argocd-bootstrap --ask-become-pass` |
-| Edge | Deploy Cloudflared | `ansible-playbook -i hosts.ini playbooks/compute/edge-deploy.yml --ask-become-pass` |
+| Cluster | Deploy K3s | `ansible-playbook -i hosts.ini playbooks/cluster/k3s-deploy.yml` |
+| Cluster | Deploy Services | `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml` |
+| Cluster | Deploy Loki only | `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags loki` |
+| Cluster | Deploy Alloy only | `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags alloy` |
+| Cluster | Sealed Secrets only | `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags sealed-secrets` |
+| Cluster | ArgoCD bootstrap | `ansible-playbook -i hosts.ini playbooks/cluster/services-deploy.yml --tags argocd-bootstrap` |
+| Cluster | Fix static IPs | `ansible-playbook -i hosts.ini playbooks/compute/netplan-deploy.yml` |
+| Edge | Deploy Cloudflared | `ansible-playbook -i hosts.ini playbooks/compute/edge-deploy.yml` |
+| Edge | Deploy Tailscale | `ansible-playbook -i hosts.ini playbooks/edge/tailscale-deploy.yml --vault-password-file=<(cat ~/.vault_pass)` |
+| Edge | Fix static IP | `ansible-playbook -i hosts.ini playbooks/edge/nm-static-deploy.yml` |
+| Edge | Deploy SSH config | `ansible-playbook -i hosts.ini playbooks/edge/ssh-config-deploy.yml` |
 | Network | OPNsense (check) | `ansible-playbook -i hosts.ini playbooks/network/network-deploy.yml --check` |
-| Utilities | Disk Health | `ansible-playbook -i hosts.ini playbooks/utilities/disk-health.yml --ask-become-pass` |
-| Utilities | Drain & Shutdown | `ansible-playbook -i hosts.ini playbooks/utilities/drain-shutdown.yml -e target=<node> --ask-become-pass` |
-| Utilities | Deploy SSH Key | `ansible-playbook -i hosts.ini playbooks/utilities/deploy-ssh-key.yml --ask-become-pass` |
-| Utilities | Seal secrets | `ansible-playbook -i hosts.ini playbooks/utilities/seal-secrets.yml --ask-become-pass` |
+| Utilities | Disk Health | `ansible-playbook -i hosts.ini playbooks/utilities/disk-health.yml` |
+| Utilities | Drain & Shutdown | `ansible-playbook -i hosts.ini playbooks/utilities/drain-shutdown.yml -e target=<node>` |
+| Utilities | Seal secrets | `ansible-playbook -i hosts.ini playbooks/utilities/seal-secrets.yml` |
 | Utilities | Gen Mosquitto passwd | `ansible-playbook -i hosts.ini playbooks/utilities/gen-mosquitto-passwd.yml -e "mqtt_user=<user> mqtt_pass=<pass>"` |
 
 ## Playbook Directory Structure
@@ -58,17 +79,24 @@ Secure remote access to `fleet1.lan` is provided via Tailscale mesh VPN. All 6 l
 ```
 playbooks/
 ├── cluster/
-│   ├── k3s-deploy.yml        — provision K3s server and agent nodes
-│   └── services-deploy.yml   — deploy Helm, Traefik, Longhorn, ArgoCD, etc.
+│   ├── k3s-deploy.yml            — provision K3s server and agent nodes
+│   └── services-deploy.yml       — deploy Helm, Traefik, Longhorn, ArgoCD, etc.
 ├── compute/
-│   └── edge-deploy.yml       — install Cloudflared systemd service on CM5 edge device
+│   ├── edge-deploy.yml           — install Cloudflared on edge (legacy entry point)
+│   ├── netplan-deploy.yml        — deploy static netplan config to cluster nodes
+│   ├── tailscale-deploy.yml      — install Tailscale on cluster nodes (unused; edge only)
+│   └── tailscale-remove.yml      — remove Tailscale from cluster nodes (-e target_hosts=<group>)
+├── edge/
+│   ├── nm-static-deploy.yml      — manage NetworkManager static IP on edge (Debian 13)
+│   ├── ssh-config-deploy.yml     — deploy SSH client config to edge for bare ssh <host> access
+│   └── tailscale-deploy.yml      — install and enroll edge in Tailscale tailnet
 ├── network/
-│   └── network-deploy.yml    — manage OPNsense router via REST API
+│   └── network-deploy.yml        — manage OPNsense router via REST API
 └── utilities/
     ├── disk-health.yml           — enumerate NVMe drives and report capacity per node
-    ├── deploy-ssh-key.yml        — deploy SSH public key to all nodes for passwordless access
     ├── drain-shutdown.yml        — drain a node and shut it down (-e target=<node>)
     ├── gen-mosquitto-passwd.yml  — generate a mosquitto_passwd hash from a plaintext password
+    ├── rack-shutdown.yml         — graceful full-rack shutdown sequence
     ├── read-k3s-token.yml        — read K3s join token from server node
     ├── seal-secrets.yml          — (re)generate sealed-secrets.yaml for the home-automation stack
     └── test-join-cmd.yml         — print K3s agent join command for manual use
@@ -80,11 +108,29 @@ playbooks/
 |-------|---------|-------|
 | `servers` | node1, node3, node5 | K3s control-plane + etcd nodes (10.1.20.11, .13, .15) |
 | `agents` | node2, node4, node6 | K3s worker nodes (10.1.20.12, .14, .16) |
-| `cluster` | servers + agents | Full 6-node K3s cluster |
-| `compute` | edge | CM5 Cloudflared device (10.1.10.10) |
-| `nvr` | nvr-host | Dedicated Frigate + Hailo-8 host (10.1.10.11) |
+| `cluster` | servers + agents | Full 6-node K3s cluster — SSH via ProxyJump through edge |
+| `edge_hosts` | edge | Debian 13 bastion device (10.1.10.10) — Tailscale + Cloudflared |
+| `nvr` | nvr-host | Dedicated Frigate + Hailo-8 host (10.1.10.11) — SSH via ProxyJump through edge |
 
 OPNsense (10.1.1.1) and unmanaged switches are documented as topology comments in `hosts.ini` — managed via `network-deploy.yml` using the `oxlorg.opnsense` REST API collection.
+
+### SSH access
+
+All hosts use ed25519 key auth. Cluster nodes and NVR are reached via ProxyJump through edge — the SSH config and Ansible group_vars both handle this automatically.
+
+```
+Management laptop
+  ├── ssh edge          → direct (10.1.10.10)
+  ├── ssh edge-ts       → direct via Tailscale IP (off-LAN)
+  ├── ssh node{1-6}     → ProxyJump via edge → 10.1.20.{11-16}
+  └── ssh nvr           → ProxyJump via edge → 10.1.10.11
+
+Edge (bastion)
+  ├── ssh node{1-6}     → direct LAN
+  └── ssh nvr           → direct LAN
+```
+
+SSH password auth is disabled on all hosts. `ansible_become_pass` (sudo escalation) is stored vault-encrypted in `group_vars/all.yml`.
 
 ### etcd Topology
 

@@ -1,4 +1,4 @@
 ---
+# Edge compute device (Debian 13, NetworkManager)
 cloudflared_service_name: cloudflared
 cloudflared_token_path: /etc/cloudflared/tunnel-token
-cloudflared_bin: /usr/bin/cloudflared

@@ -1,0 +1,6 @@
+---
+netplan_interface: enp89s0
+netplan_renderer: NetworkManager
+netplan_nameservers:
+  - 10.1.1.1
+

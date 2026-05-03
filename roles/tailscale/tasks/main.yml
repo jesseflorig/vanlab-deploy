@@ -10,13 +10,23 @@
 
 # ── T007: APT repository and package install ──────────────────────────────────
 
-- name: Set Tailscale deb architecture
+- name: Gather minimal distribution facts
+  ansible.builtin.setup:
+    filter:
+      - ansible_architecture
+      - ansible_distribution
+      - ansible_distribution_release
+  when: ansible_distribution is not defined
+
+- name: Set Tailscale deb architecture and distro facts
   ansible.builtin.set_fact:
     tailscale_deb_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+    tailscale_distro: "{{ ansible_distribution | lower }}"
+    tailscale_codename: "{{ ansible_distribution_release }}"
 
 - name: Download Tailscale apt signing key (on controller)
   ansible.builtin.get_url:
-    url: https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg
+    url: "https://pkgs.tailscale.com/stable/{{ tailscale_distro }}/{{ tailscale_codename }}.noarmor.gpg"
     dest: /tmp/tailscale-archive-keyring.gpg
     mode: "0644"
   delegate_to: localhost
@@ -33,7 +43,7 @@
 
 - name: Add Tailscale apt repository
   ansible.builtin.copy:
-    content: "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/debian bookworm main\n"
+    content: "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/{{ tailscale_distro }} {{ tailscale_codename }} main\n"
     dest: /etc/apt/sources.list.d/tailscale.list
     mode: "0644"
 

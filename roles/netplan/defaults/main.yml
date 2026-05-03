@@ -5,6 +5,5 @@
 
 netplan_interface: eth0
 netplan_prefix_length: "24"
-netplan_address: ""  # REQUIRED — set per host as netplan_address in hosts.ini
 netplan_nameservers:
   - 10.1.1.1         # OPNsense Unbound — primary DNS for all lab nodes

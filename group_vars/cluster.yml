@@ -2,3 +2,10 @@
 # K3s cluster configuration
 k3s_master_ip: "10.1.20.11"
 k3s_flannel_iface: "eth0"
+
+# Remote access: all cluster connections proxy through edge (Tailscale IP).
+# Works from LAN and remote equally — edge's Tailscale IP is always reachable.
+ansible_ssh_common_args: >-
+  -o ProxyJump=fleetadmin@10.1.10.10
+  -o StrictHostKeyChecking=no
+  -o UserKnownHostsFile=/dev/null

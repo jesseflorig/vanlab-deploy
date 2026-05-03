@@ -2,14 +2,17 @@
 # Source: roles/netplan/templates/60-ansible-static.yaml.j2
 network:
   version: 2
+{% if netplan_renderer is defined %}
+  renderer: {{ netplan_renderer }}
+{% endif %}
   ethernets:
     {{ netplan_interface }}:
       dhcp4: false
       addresses:
-        - {{ netplan_address }}/{{ netplan_prefix_length }}
+        - {{ ansible_host }}/{{ netplan_prefix_length }}
       routes:
         - to: 0.0.0.0/0
-          via: {{ netplan_address | regex_replace('\.\d+$', '.1') }}
+          via: {{ ansible_host | regex_replace('\.\d+$', '.1') }}
           on-link: true
       nameservers:
         addresses:

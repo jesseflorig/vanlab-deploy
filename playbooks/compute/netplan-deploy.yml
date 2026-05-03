@@ -5,7 +5,7 @@
 # static IPs to be dropped on reboot.
 
 - name: Deploy static netplan config to all managed nodes
-  hosts: cluster:compute
+  hosts: "{{ target_hosts | default('cluster:compute') }}"
   become: true
   gather_facts: false
 

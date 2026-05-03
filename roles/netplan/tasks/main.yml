@@ -4,11 +4,6 @@
 # different filename so cloud-init never overwrites it) with dhcp4: false and the
 # node's static IP from inventory. Also removes the old conflicting files.
 
-- name: Assert netplan_address is set
-  ansible.builtin.assert:
-    that: netplan_address | length > 0
-    fail_msg: "netplan_address must be set for {{ inventory_hostname }} in hosts.ini"
-
 - name: Write static netplan config
   ansible.builtin.template:
     src: 60-ansible-static.yaml.j2
@@ -30,6 +25,18 @@
     state: absent
   register: netplan_dns_removed
 
+- name: Remove legacy NetworkManager catch-all
+  ansible.builtin.file:
+    path: /etc/netplan/01-network-manager-all.yaml
+    state: absent
+  register: netplan_nm_removed
+
+- name: Remove legacy 99-static-ip.yaml
+  ansible.builtin.file:
+    path: /etc/netplan/99-static-ip.yaml
+    state: absent
+  register: netplan_static_removed
+
 - name: Disable cloud-init network management
   ansible.builtin.copy:
     content: "network: {config: disabled}\n"
@@ -40,5 +47,10 @@
 
 - name: Apply netplan
   ansible.builtin.command: netplan apply
-  when: netplan_config.changed or netplan_cloudinit_removed.changed or netplan_dns_removed.changed
+  when: >
+    netplan_config.changed or
+    netplan_cloudinit_removed.changed or
+    netplan_dns_removed.changed or
+    netplan_nm_removed.changed or
+    netplan_static_removed.changed
   changed_when: true
