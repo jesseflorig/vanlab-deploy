@@ -14,4 +14,7 @@ data:
       use_x_forwarded_for: true
       trusted_proxies:
         - 10.42.0.0/16
+  frigate.yaml: |
+    frigate:
+      host: http://10.1.10.11:5000
 
