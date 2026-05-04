@@ -68,6 +68,39 @@
     replace: '\1dtoverlay=uart4'
   notify: Reboot for config.txt changes
 
+# ── CM5 gpiochip remap ────────────────────────────────────────────────────────
+# On CM5, gpiochip0 is BCM2712 native GPIO (line 20 = pwr_button, kernel-claimed).
+# The agent hardcodes gpiochip0 expecting RP1 (correct on Pi 5, wrong on CM5).
+# gpiod validates chips by cross-checking /dev/gpiochipN major:minor against
+# /sys/bus/gpio/devices/gpiochipN/dev. Two bind-mounts are required:
+#   1. /dev/gpiochip4 → /dev/gpiochip0  (device node)
+#   2. /sys/.../gpiochip4/dev → /sys/.../gpiochip0/dev  (sysfs major:minor file)
+# ExecStopPost unmounts both to restore original state.
+
+- name: Ensure compute-blade-agent drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/compute-blade-agent.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install systemd drop-in to remap gpiochip0 → RP1 (gpiochip4)
+  ansible.builtin.copy:
+    content: |
+      [Service]
+      ExecStartPre=/bin/mount --bind /dev/gpiochip4 /dev/gpiochip0
+      ExecStartPre=/bin/mount --bind /sys/bus/gpio/devices/gpiochip4/dev /sys/bus/gpio/devices/gpiochip0/dev
+      ExecStopPost=-/bin/umount /sys/bus/gpio/devices/gpiochip0/dev
+      ExecStopPost=-/bin/umount /dev/gpiochip0
+    dest: /etc/systemd/system/compute-blade-agent.service.d/gpiochip-remap.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart compute-blade-agent
+
 # ── Service ───────────────────────────────────────────────────────────────────
 
 - name: Enable and start compute-blade-agent

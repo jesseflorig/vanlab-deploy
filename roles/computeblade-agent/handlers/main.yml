@@ -1,4 +1,8 @@
 ---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
 - name: Restart compute-blade-agent
   ansible.builtin.service:
     name: compute-blade-agent
@@ -7,6 +11,6 @@
 
 - name: Reboot for config.txt changes
   ansible.builtin.reboot:
-    reboot_timeout: 120
+    reboot_timeout: 300
     msg: "Rebooting to apply /boot/firmware/config.txt UART overlay change"
   ignore_errors: "{{ ansible_check_mode }}"
