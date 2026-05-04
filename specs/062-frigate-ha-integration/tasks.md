@@ -46,7 +46,7 @@ description: "Task list for Frigate Home Assistant integration implementation"
 ### Implementation for User Story 1
 
 - [x] T008 [US1] Add `frigate.yaml` package to `manifests/home-automation/prereqs/config-extra.yaml` with `frigate: host: http://10.1.10.11:5000`
-- [ ] T009 [US1] Commit and push updated `config-extra.yaml` to Gitea for ArgoCD sync
+- [x] T009 [US1] Commit and push updated `config-extra.yaml` to Gitea for ArgoCD sync
 - [ ] T010 [US1] Finalize integration setup in HA UI (**Settings** → **Devices & Services** → **Add Integration** → **Frigate**)
 - [ ] T011 [US1] Verify camera entities (e.g., `camera.front_door`) are created and showing live streams
 
@@ -89,7 +89,7 @@ description: "Task list for Frigate Home Assistant integration implementation"
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T017 [P] Update `specs/062-frigate-ha-integration/quickstart.md` with any discovered installation nuances
+- [x] T017 [P] Update `specs/062-frigate-ha-integration/quickstart.md` with any discovered installation nuances
 - [ ] T018 Run final validation of all success criteria defined in `spec.md`
 - [ ] T019 [P] Document any manual UI steps required in the project's permanent documentation if necessary
 - [ ] T020 Verify SC-004: Perform a rolling restart of the K3s cluster nodes and verify that the Home Assistant Frigate entities automatically return to a "Connected" state without manual intervention.
