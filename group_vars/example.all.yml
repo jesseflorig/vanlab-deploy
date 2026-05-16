@@ -81,11 +81,8 @@ argocd_apps:
     path: manifests/minio/prereqs
     namespace: minio
     revision: main
-  - name: minio
-    repo: gitadmin/vanlab.git
-    path: manifests/minio/apps
-    namespace: argocd
-    revision: main
+  # Note: minio Helm Application (manifests/minio/apps/minio-app.yaml) is multi-source;
+  # apply directly: kubectl apply -f manifests/minio/apps/minio-app.yaml
 
 # ── Home Automation Stack ─────────────────────────────────────────────────────
 # Used by: services-deploy.yml → mosquitto, influxdb, home-assistant, node-red roles

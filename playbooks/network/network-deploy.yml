@@ -64,6 +64,7 @@
       - hostname: grafana
       - hostname: hass
       - hostname: influxdb
+      - hostname: minio
       - hostname: mqtt
       - hostname: node-red
       - hostname: prometheus
