@@ -12,7 +12,6 @@ spec:
   tls:
     options:
       name: device-mtls
-      namespace: traefik
   routes:
     - match: Host(`frigate.fleet1.lan`)
       kind: Rule

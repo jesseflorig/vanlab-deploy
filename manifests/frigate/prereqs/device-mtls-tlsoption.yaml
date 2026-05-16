@@ -1,0 +1,13 @@
+---
+# Traefik TLSOption: device-mtls (Frigate namespace)
+# Duplicate of the traefik/device-mtls option to resolve cross-namespace reference issues.
+apiVersion: traefik.io/v1alpha1
+kind: TLSOption
+metadata:
+  name: device-mtls
+  namespace: frigate
+spec:
+  clientAuth:
+    secretNames:
+      - device-ca-public
+    clientAuthType: RequireAndVerifyClientCert
