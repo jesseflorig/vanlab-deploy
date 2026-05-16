@@ -12,6 +12,7 @@ spec:
   tls:
     options:
       name: device-mtls
+      namespace: frigate
   routes:
     - match: Host(`frigate.fleet1.lan`)
       kind: Rule
