@@ -48,18 +48,27 @@ Merge via Gitea PR per the CLAUDE.md workflow.
 
 ## Step 4 — Register and sync via ArgoCD
 
+Add only `minio-prereqs` to `argocd_apps` in `group_vars/all.yml` — the Helm Application
+(`minio`) is multi-source and must be applied directly (the `argocd-bootstrap` role only
+supports single-source Applications and would create a self-referential loop):
+
 ```yaml
-# group_vars/all.yml — argocd_apps additions
+# group_vars/all.yml — argocd_apps addition
 argocd_apps:
   # ...existing entries...
   - name: minio-prereqs
+    repo: gitadmin/vanlab.git
     path: manifests/minio/prereqs
-  - name: minio
-    path: manifests/minio/apps
+    namespace: minio
+    revision: main
 ```
 
 ```bash
+# Register minio-prereqs via bootstrap:
 ansible-playbook playbooks/cluster/services-deploy.yml --tags argocd-bootstrap
+
+# Apply the multi-source Helm Application directly:
+kubectl apply -f manifests/minio/apps/minio-app.yaml
 ```
 
 Watch `https://argocd.fleet1.cloud` → both `minio-prereqs` and `minio` Applications should reach Synced + Healthy within ~3 minutes.
@@ -82,6 +91,7 @@ kubectl get ingressroute -n minio
 curl -s -o /dev/null -w "%{http_code}\n" \
   https://minio.fleet1.lan/login
 # Expected: 200 (admin console UI loads over TLS)
+# Note: requires management laptop device cert (device-mtls) and OPNsense as DNS resolver
 ```
 
 Verify arm64 image was pulled:

@@ -88,19 +88,19 @@ GitOps manifest layout per Constitution Principle XI:
 
 ### Implementation for User Story 1
 
-- [ ] T016 [US1] Fetch live credentials into shell variables on the management laptop: `ROOT_USER`/`ROOT_PASS` from `Secret/minio-root`; `LH_AK`/`LH_SK` from `Secret/longhorn-minio-credentials-source` (exact commands in quickstart.md Step 6)
-- [ ] T017 [US1] Open a port-forward `kubectl port-forward -n minio svc/minio 9000:9000` in the background; capture `$PF_PID` for teardown
-- [ ] T018 [US1] Configure `mc` alias: `mc alias set vanlab-minio http://localhost:9000 "$ROOT_USER" "$ROOT_PASS"`
-- [ ] T019 [US1] Create the Longhorn backup bucket: `mc mb --ignore-existing vanlab-minio/longhorn-backups`
-- [ ] T020 [US1] Write the scoped policy JSON to `/tmp/longhorn-backups-rw.json` per data-model.md (Allow `s3:GetObject`/`PutObject`/`DeleteObject` on `arn:aws:s3:::longhorn-backups/*`; Allow `s3:ListBucket`/`GetBucketLocation` on `arn:aws:s3:::longhorn-backups`); register it with `mc admin policy create vanlab-minio longhorn-backups-rw /tmp/longhorn-backups-rw.json`
-- [ ] T021 [US1] Create the Longhorn user with the pre-generated keys: `mc admin user add vanlab-minio "$LH_AK" "$LH_SK"`; attach policy: `mc admin policy attach vanlab-minio longhorn-backups-rw --user "$LH_AK"`
+- [x] T016 [US1] Fetch live credentials into shell variables on the management laptop: `ROOT_USER`/`ROOT_PASS` from `Secret/minio-root`; `LH_AK`/`LH_SK` from `Secret/longhorn-minio-credentials-source` (exact commands in quickstart.md Step 6)
+- [x] T017 [US1] Open a port-forward `kubectl port-forward -n minio svc/minio 9000:9000` in the background; capture `$PF_PID` for teardown
+- [x] T018 [US1] Configure `mc` alias: `mc alias set vanlab-minio http://localhost:9000 "$ROOT_USER" "$ROOT_PASS"`
+- [x] T019 [US1] Create the Longhorn backup bucket: `mc mb --ignore-existing vanlab-minio/longhorn-backups`
+- [x] T020 [US1] Write the scoped policy JSON to `/tmp/longhorn-backups-rw.json` per data-model.md (Allow `s3:GetObject`/`PutObject`/`DeleteObject` on `arn:aws:s3:::longhorn-backups/*`; Allow `s3:ListBucket`/`GetBucketLocation` on `arn:aws:s3:::longhorn-backups`); register it with `mc admin policy create vanlab-minio longhorn-backups-rw /tmp/longhorn-backups-rw.json`
+- [x] T021 [US1] Create the Longhorn user with the pre-generated keys: `mc admin user add vanlab-minio "$LH_AK" "$LH_SK"`; attach policy: `mc admin policy attach vanlab-minio longhorn-backups-rw --user "$LH_AK"`
 
 ### Verification for User Story 1
 
-- [ ] T022 [US1] Positive test: `mc alias set vanlab-minio-longhorn http://localhost:9000 "$LH_AK" "$LH_SK"`; `mc ls vanlab-minio-longhorn/longhorn-backups` → empty, exit 0; `echo hello | mc pipe vanlab-minio-longhorn/longhorn-backups/test-object.txt`; `mc ls vanlab-minio-longhorn/longhorn-backups` → sees the object; `mc rm vanlab-minio-longhorn/longhorn-backups/test-object.txt`
-- [ ] T023 [US1] **Critical FR-005 scope test**: `mc ls vanlab-minio-longhorn` should return only `longhorn-backups` (or 403 on bucket-list, depending on `mc` version). If the user can list other arbitrary buckets, the policy is over-broad — STOP and fix T020 before proceeding
-- [ ] T024 [US1] Tear down the port-forward: `kill $PF_PID`
-- [ ] T025 [US1] Confirm the contract handoff to spec 061: `contracts/longhorn-backup-target.md` is current; the `AWS_ENDPOINTS` value `http://minio.minio.svc.cluster.local:9000` matches the deployed `Service` (`kubectl get svc -n minio minio`)
+- [x] T022 [US1] Positive test: `mc alias set vanlab-minio-longhorn http://localhost:9000 "$LH_AK" "$LH_SK"`; `mc ls vanlab-minio-longhorn/longhorn-backups` → empty, exit 0; `echo hello | mc pipe vanlab-minio-longhorn/longhorn-backups/test-object.txt`; `mc ls vanlab-minio-longhorn/longhorn-backups` → sees the object; `mc rm vanlab-minio-longhorn/longhorn-backups/test-object.txt`
+- [x] T023 [US1] **Critical FR-005 scope test**: `mc ls vanlab-minio-longhorn` should return only `longhorn-backups` (or 403 on bucket-list, depending on `mc` version). If the user can list other arbitrary buckets, the policy is over-broad — STOP and fix T020 before proceeding
+- [x] T024 [US1] Tear down the port-forward: `kill $PF_PID`
+- [x] T025 [US1] Confirm the contract handoff to spec 061: `contracts/longhorn-backup-target.md` is current; the `AWS_ENDPOINTS` value `http://minio.minio.svc.cluster.local:9000` matches the deployed `Service` (`kubectl get svc -n minio minio`)
 
 **Checkpoint**: User Story 1 is complete — Longhorn has its backup target ready. Spec 061 can begin (after 060 is fully merged).
 
@@ -114,14 +114,14 @@ GitOps manifest layout per Constitution Principle XI:
 
 ### Implementation for User Story 2
 
-- [ ] T026 [US2] Re-establish port-forward + root `mc` alias (T017–T018) if not still active
-- [ ] T027 [US2] Create the general-purpose bucket: `mc mb --ignore-existing vanlab-minio/vanlab-archive`
+- [x] T026 [US2] Re-establish port-forward + root `mc` alias (T017–T018) if not still active
+- [x] T027 [US2] Create the general-purpose bucket: `mc mb --ignore-existing vanlab-minio/vanlab-archive`
 
 ### Verification for User Story 2
 
-- [ ] T028 [US2] Bucket exists: `mc ls vanlab-minio/` shows both `longhorn-backups` and `vanlab-archive`
-- [ ] T029 [US2] **Scope isolation negative test**: with the Longhorn alias `vanlab-minio-longhorn`, run `mc ls vanlab-minio-longhorn/vanlab-archive` → MUST fail with 403/Access Denied. If it succeeds, the `longhorn-backups-rw` policy is too broad — return to T020 and re-scope
-- [ ] T030 [US2] Tear down port-forward: `kill $PF_PID`
+- [x] T028 [US2] Bucket exists: `mc ls vanlab-minio/` shows both `longhorn-backups` and `vanlab-archive`
+- [x] T029 [US2] **Scope isolation negative test**: with the Longhorn alias `vanlab-minio-longhorn`, run `mc ls vanlab-minio-longhorn/vanlab-archive` → MUST fail with 403/Access Denied. If it succeeds, the `longhorn-backups-rw` policy is too broad — return to T020 and re-scope
+- [x] T030 [US2] Tear down port-forward: `kill $PF_PID`
 
 **Checkpoint**: User Story 2 is complete — second bucket exists; per-bucket scoping is proven by negative test.
 
@@ -135,10 +135,10 @@ GitOps manifest layout per Constitution Principle XI:
 
 ### Verification for User Story 3
 
-- [ ] T031 [US3] ArgoCD idempotency: in the ArgoCD UI, click "Sync" on both `minio-prereqs` and `minio` Applications with `Apply Only`; verify zero resources changed (Synced status remains green with no out-of-sync items)
-- [ ] T032 [US3] [P] Secret-hygiene audit: from repo root, run `git grep -E '<one of the four plaintext values from T003>'` for each of the four credentials individually — all four MUST return zero matches across tracked files
-- [ ] T033 [US3] [P] Bootstrap idempotency: re-run the commands from T019, T020, T021 — `mc mb --ignore-existing` is a no-op; `mc admin policy create` against the same JSON is upsert-safe; `mc admin user add` with the same key/secret completes without error
-- [ ] T034 [US3] Verify arm64 image was pulled: `kubectl get pod -n minio -o jsonpath='{.items[0].spec.containers[0].image}'`; confirm the digest is the arm64 variant of the multi-arch manifest (per research.md R1)
+- [x] T031 [US3] ArgoCD idempotency: in the ArgoCD UI, click "Sync" on both `minio-prereqs` and `minio` Applications with `Apply Only`; verify zero resources changed (Synced status remains green with no out-of-sync items)
+- [x] T032 [US3] [P] Secret-hygiene audit: from repo root, run `git grep -E '<one of the four plaintext values from T003>'` for each of the four credentials individually — all four MUST return zero matches across tracked files
+- [x] T033 [US3] [P] Bootstrap idempotency: re-run the commands from T019, T020, T021 — `mc mb --ignore-existing` is a no-op; `mc admin policy create` against the same JSON is upsert-safe; `mc admin user add` with the same key/secret completes without error
+- [x] T034 [US3] Verify arm64 image was pulled: `kubectl get pod -n minio -o jsonpath='{.items[0].spec.containers[0].image}'`; confirm the digest is the arm64 variant of the multi-arch manifest (per research.md R1)
 
 **Checkpoint**: User Story 3 is complete — install is GitOps-managed, idempotent, and secret-clean.
 
@@ -150,7 +150,7 @@ GitOps manifest layout per Constitution Principle XI:
 
 - [x] T035 [P] Add a Prometheus alert for MinIO PVC at ≥70% used (per FR-010); the alert lives in the existing monitoring stack alerts directory and references `kubelet_volume_stats_used_bytes` filtered to the `minio` namespace
 - [x] T036 [P] Note in `specs/061-longhorn-backup-target/spec.md` that spec 060 is now landed and the contract in `specs/060-minio-object-store/contracts/longhorn-backup-target.md` is current — flip 061's `NEEDS REVALIDATION` banner to ready-for-`/speckit.clarify` if appropriate (decision left to operator)
-- [ ] T037 Run the full `quickstart.md` end-to-end one more time against the deployed cluster as a final acceptance check; record any drift between the runbook and reality and fix the runbook before marking 060 done
+- [x] T037 Run the full `quickstart.md` end-to-end one more time against the deployed cluster as a final acceptance check; record any drift between the runbook and reality and fix the runbook before marking 060 done
 
 ---
 
