@@ -1,0 +1,70 @@
+# Longhorn RecurringJob definitions — two-tier backup policy (spec 061 clarifications).
+#
+# Tier A (data PVCs — source of truth): 7-day snapshot retention, 4-week backup retention.
+#   Applies to: Gitea, Loki, Home Automation stack, Frigate clips.
+#   PVC labels applied by: playbooks/utilities/label-pvcs.yml
+#
+# Tier B (monitoring PVCs — reconstructible): 3-day snapshot, 2-week backup retention.
+#   Applies to: Prometheus, Alertmanager, Grafana.
+#
+# Snapshots run nightly at 01:00; backups (to MinIO) run weekly on Sunday at 03:00.
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: snapshot-tier-a
+  namespace: longhorn-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  cron: "0 1 * * *"
+  task: snapshot
+  groups:
+    - tier-a
+  retain: 7
+  concurrency: 1
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: backup-tier-a
+  namespace: longhorn-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  cron: "0 3 * * 0"
+  task: backup
+  groups:
+    - tier-a
+  retain: 4
+  concurrency: 1
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: snapshot-tier-b
+  namespace: longhorn-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  cron: "0 1 * * *"
+  task: snapshot
+  groups:
+    - tier-b
+  retain: 3
+  concurrency: 1
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: backup-tier-b
+  namespace: longhorn-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  cron: "0 3 * * 0"
+  task: backup
+  groups:
+    - tier-b
+  retain: 2
+  concurrency: 1

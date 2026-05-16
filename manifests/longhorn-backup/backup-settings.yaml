@@ -1,0 +1,21 @@
+# Longhorn backup target configuration — points Longhorn at the MinIO longhorn-backups
+# bucket (provisioned by spec 060). Applied after the SealedSecret (wave 0) so the
+# credential secret exists before Longhorn validates the target on first sync.
+---
+apiVersion: longhorn.io/v1beta2
+kind: Setting
+metadata:
+  name: backup-target
+  namespace: longhorn-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+value: "s3://longhorn-backups@us-east-1/"
+---
+apiVersion: longhorn.io/v1beta2
+kind: Setting
+metadata:
+  name: backup-target-credential-secret
+  namespace: longhorn-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+value: "longhorn-minio-credentials"

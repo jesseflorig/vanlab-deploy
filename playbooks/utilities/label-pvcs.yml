@@ -1,0 +1,174 @@
+---
+# Apply Longhorn RecurringJob group labels to critical cluster PVCs (spec 061).
+#
+# This playbook is run once after ArgoCD has synced the RecurringJob CRDs.
+# It is idempotent — kubectl label --overwrite is safe to re-run at any time.
+#
+# Tier A (7-day snapshot / 4-week backup — data PVCs, source of truth):
+#   Gitea, Loki, Mosquitto, Home Assistant, Node-RED, InfluxDB, Frigate clips
+#
+# Tier B (3-day snapshot / 2-week backup — monitoring PVCs, reconstructible):
+#   Prometheus, Alertmanager, Grafana
+#
+# When spec 063 (Authentik) deploys, add its Postgres PVC to Tier A by adding
+# an entry to the tier_a_named section and re-running this playbook.
+
+- name: Apply Longhorn RecurringJob group labels to critical PVCs
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  environment:
+    KUBECONFIG: "{{ lookup('env', 'KUBECONFIG') | default('/etc/rancher/k3s/k3s.yaml', true) }}"
+
+  tasks:
+
+    # ── Tier A — named PVCs ────────────────────────────────────────────────────
+
+    - name: Label Tier A PVCs by name
+      ansible.builtin.command: >
+        kubectl label pvc {{ item.name }} -n {{ item.namespace }}
+        recurring-job-group.longhorn.io/tier-a=enabled
+        --overwrite
+      loop:
+        - { name: gitea-shared-storage, namespace: gitea }
+        - { name: mosquitto-data,       namespace: home-automation }
+        - { name: frigate-clips,        namespace: frigate }
+      register: label_tier_a_named
+      changed_when: "'labeled' in label_tier_a_named.stdout or 'already' not in label_tier_a_named.stdout"
+
+    # ── Tier A — selector-discovered PVCs ────────────────────────────────────
+    # Helm-deployed StatefulSets generate PVC names dynamically; discover via label selector.
+
+    - name: Get Loki PVC name
+      ansible.builtin.command: >
+        kubectl get pvc -n monitoring -l app.kubernetes.io/name=loki
+        -o jsonpath='{.items[0].metadata.name}'
+      register: loki_pvc_name
+      changed_when: false
+      failed_when: loki_pvc_name.stdout == ""
+
+    - name: Label Loki PVC (Tier A)
+      ansible.builtin.command: >
+        kubectl label pvc {{ loki_pvc_name.stdout }} -n monitoring
+        recurring-job-group.longhorn.io/tier-a=enabled
+        --overwrite
+      register: label_loki
+      changed_when: "'labeled' in label_loki.stdout or 'already' not in label_loki.stdout"
+
+    - name: Get Home Assistant PVC name
+      ansible.builtin.command: >
+        kubectl get pvc -n home-automation -l app.kubernetes.io/instance=home-assistant
+        -o jsonpath='{.items[0].metadata.name}'
+      register: ha_pvc_name
+      changed_when: false
+      failed_when: ha_pvc_name.stdout == ""
+
+    - name: Label Home Assistant PVC (Tier A)
+      ansible.builtin.command: >
+        kubectl label pvc {{ ha_pvc_name.stdout }} -n home-automation
+        recurring-job-group.longhorn.io/tier-a=enabled
+        --overwrite
+      register: label_ha
+      changed_when: "'labeled' in label_ha.stdout or 'already' not in label_ha.stdout"
+
+    - name: Get Node-RED PVC name
+      ansible.builtin.command: >
+        kubectl get pvc -n home-automation -l app.kubernetes.io/instance=node-red
+        -o jsonpath='{.items[0].metadata.name}'
+      register: nodered_pvc_name
+      changed_when: false
+      failed_when: nodered_pvc_name.stdout == ""
+
+    - name: Label Node-RED PVC (Tier A)
+      ansible.builtin.command: >
+        kubectl label pvc {{ nodered_pvc_name.stdout }} -n home-automation
+        recurring-job-group.longhorn.io/tier-a=enabled
+        --overwrite
+      register: label_nodered
+      changed_when: "'labeled' in label_nodered.stdout or 'already' not in label_nodered.stdout"
+
+    - name: Get InfluxDB PVC name
+      ansible.builtin.command: >
+        kubectl get pvc -n home-automation -l app.kubernetes.io/instance=influxdb
+        -o jsonpath='{.items[0].metadata.name}'
+      register: influxdb_pvc_name
+      changed_when: false
+      failed_when: influxdb_pvc_name.stdout == ""
+
+    - name: Label InfluxDB PVC (Tier A)
+      ansible.builtin.command: >
+        kubectl label pvc {{ influxdb_pvc_name.stdout }} -n home-automation
+        recurring-job-group.longhorn.io/tier-a=enabled
+        --overwrite
+      register: label_influxdb
+      changed_when: "'labeled' in label_influxdb.stdout or 'already' not in label_influxdb.stdout"
+
+    # ── Tier B — selector-discovered PVCs ────────────────────────────────────
+
+    - name: Get Prometheus PVC name
+      ansible.builtin.command: >
+        kubectl get pvc -n monitoring -l app.kubernetes.io/name=prometheus
+        -o jsonpath='{.items[0].metadata.name}'
+      register: prometheus_pvc_name
+      changed_when: false
+      failed_when: prometheus_pvc_name.stdout == ""
+
+    - name: Label Prometheus PVC (Tier B)
+      ansible.builtin.command: >
+        kubectl label pvc {{ prometheus_pvc_name.stdout }} -n monitoring
+        recurring-job-group.longhorn.io/tier-b=enabled
+        --overwrite
+      register: label_prometheus
+      changed_when: "'labeled' in label_prometheus.stdout or 'already' not in label_prometheus.stdout"
+
+    - name: Get Alertmanager PVC name
+      ansible.builtin.command: >
+        kubectl get pvc -n monitoring -l app.kubernetes.io/name=alertmanager
+        -o jsonpath='{.items[0].metadata.name}'
+      register: alertmanager_pvc_name
+      changed_when: false
+      failed_when: alertmanager_pvc_name.stdout == ""
+
+    - name: Label Alertmanager PVC (Tier B)
+      ansible.builtin.command: >
+        kubectl label pvc {{ alertmanager_pvc_name.stdout }} -n monitoring
+        recurring-job-group.longhorn.io/tier-b=enabled
+        --overwrite
+      register: label_alertmanager
+      changed_when: "'labeled' in label_alertmanager.stdout or 'already' not in label_alertmanager.stdout"
+
+    - name: Get Grafana PVC name
+      ansible.builtin.command: >
+        kubectl get pvc -n monitoring -l app.kubernetes.io/name=grafana
+        -o jsonpath='{.items[0].metadata.name}'
+      register: grafana_pvc_name
+      changed_when: false
+      failed_when: grafana_pvc_name.stdout == ""
+
+    - name: Label Grafana PVC (Tier B)
+      ansible.builtin.command: >
+        kubectl label pvc {{ grafana_pvc_name.stdout }} -n monitoring
+        recurring-job-group.longhorn.io/tier-b=enabled
+        --overwrite
+      register: label_grafana
+      changed_when: "'labeled' in label_grafana.stdout or 'already' not in label_grafana.stdout"
+
+    # ── Summary ────────────────────────────────────────────────────────────────
+
+    - name: Label application summary
+      ansible.builtin.debug:
+        msg:
+          - "Tier A labels applied:"
+          - "  gitea-shared-storage (gitea)"
+          - "  {{ loki_pvc_name.stdout }} (monitoring)"
+          - "  {{ ha_pvc_name.stdout }} (home-automation)"
+          - "  {{ nodered_pvc_name.stdout }} (home-automation)"
+          - "  {{ influxdb_pvc_name.stdout }} (home-automation)"
+          - "  mosquitto-data (home-automation)"
+          - "  frigate-clips (frigate)"
+          - "Tier B labels applied:"
+          - "  {{ prometheus_pvc_name.stdout }} (monitoring)"
+          - "  {{ alertmanager_pvc_name.stdout }} (monitoring)"
+          - "  {{ grafana_pvc_name.stdout }} (monitoring)"
+          - "Verify with: kubectl get pvc -A --show-labels | grep recurring-job-group"
