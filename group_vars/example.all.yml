@@ -76,6 +76,16 @@ argocd_apps:
     namespace: frigate
     revision: main
     recurse: true
+  - name: minio-prereqs
+    repo: gitadmin/vanlab.git
+    path: manifests/minio/prereqs
+    namespace: minio
+    revision: main
+  - name: minio
+    repo: gitadmin/vanlab.git
+    path: manifests/minio/apps
+    namespace: argocd
+    revision: main
 
 # ── Home Automation Stack ─────────────────────────────────────────────────────
 # Used by: services-deploy.yml → mosquitto, influxdb, home-assistant, node-red roles
@@ -176,6 +186,25 @@ nvr_cameras: []
 # pki_ca_secret_name: fleet1-lan-ca-secret
 # pki_wildcard_name: fleet1-lan-wildcard-tls
 # pki_wildcard_secret_name: fleet1-lan-wildcard-tls
+
+# ── MinIO Object Storage (060-minio-object-store) ────────────────────────────
+# Used by: playbooks/utilities/seal-secrets.yml (seals minio-root + longhorn-minio-credentials-source)
+#          playbooks/cluster/services-deploy.yml --tags argocd-bootstrap (registers ArgoCD apps)
+#
+# Deployment order (first time):
+#   1. Fill all four values below
+#   2. ansible-playbook playbooks/utilities/seal-secrets.yml
+#      git add manifests/minio/prereqs/sealed-secrets.yaml && git commit && git push gitea 060-minio-object-store
+#   3. ansible-playbook playbooks/cluster/services-deploy.yml --tags argocd-bootstrap
+#   4. Run mc bootstrap steps (see specs/060-minio-object-store/quickstart.md Steps 6–7)
+
+# MinIO root admin credentials
+minio_root_user: <MINIO_ROOT_USER>
+minio_root_password: <MINIO_ROOT_PASSWORD_32_CHARS>
+
+# Longhorn-scoped MinIO credentials (pre-generate; these are used by mc admin user add)
+longhorn_minio_access_key: <LONGHORN_MINIO_ACCESS_KEY_20_CHARS>
+longhorn_minio_secret_key: <LONGHORN_MINIO_SECRET_KEY_40_CHARS>
 
 # ── Tailscale Remote Access (059-tailscale-remote-access) ────────────────────
 # Used by: playbooks/compute/tailscale-deploy.yml → tailscale role

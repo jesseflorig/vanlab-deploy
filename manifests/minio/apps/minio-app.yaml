@@ -1,0 +1,40 @@
+---
+# ArgoCD Application: MinIO Object Storage
+# Multi-source: Helm chart from charts.min.io + values file from this Gitea repo.
+#
+# Chart pinned to 5.4.0 (latest stable 5.x as of 2026-05-16).
+# To upgrade: bump targetRevision, review `helm show values minio/minio --version <new>` for key renames.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: minio
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://charts.min.io/
+      chart: minio
+      targetRevision: "5.4.0"
+      helm:
+        valueFiles:
+          - $values/manifests/minio/minio-values.yaml
+    - repoURL: https://gitea.fleet1.cloud:30443/gitadmin/vanlab.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: minio
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 10m
