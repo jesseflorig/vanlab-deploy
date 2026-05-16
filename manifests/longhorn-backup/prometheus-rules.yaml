@@ -1,0 +1,44 @@
+# Prometheus alerting rules for Longhorn backup health (spec 061 US3).
+# The kube-prometheus-stack defaults do not include backup job failure alerts;
+# these rules fill that gap.
+#
+# Alerts:
+#   LonghornBackupFailed     — any backup in error state for 10+ minutes
+#   LonghornVolumeNotBackedUp — volume has not had a successful backup in 9+ days
+#                               (7-day Tier A cadence + 2-day grace period)
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: longhorn-backup-alerts
+  namespace: longhorn-system
+  labels:
+    release: kube-prometheus-stack
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  groups:
+    - name: longhorn.backup
+      rules:
+        - alert: LonghornBackupFailed
+          expr: longhorn_backup_state == 3
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Longhorn backup failed"
+            description: >-
+              Longhorn backup {{ $labels.backup }} on volume {{ $labels.volume }}
+              has been in error state for more than 10 minutes.
+
+        - alert: LonghornVolumeNotBackedUp
+          expr: time() - longhorn_volume_last_backup_at > 777600
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Longhorn volume not backed up in 9 days"
+            description: >-
+              Longhorn volume {{ $labels.volume }} has not had a successful
+              backup in over 9 days. Check the backup target and RecurringJob
+              schedules.

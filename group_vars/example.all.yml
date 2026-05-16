@@ -83,6 +83,11 @@ argocd_apps:
     revision: main
   # Note: minio Helm Application (manifests/minio/apps/minio-app.yaml) is multi-source;
   # apply directly: kubectl apply -f manifests/minio/apps/minio-app.yaml
+  - name: longhorn-backup
+    repo: gitadmin/vanlab.git
+    path: manifests/longhorn-backup
+    namespace: longhorn-system
+    revision: main
 
 # ── Home Automation Stack ─────────────────────────────────────────────────────
 # Used by: services-deploy.yml → mosquitto, influxdb, home-assistant, node-red roles
