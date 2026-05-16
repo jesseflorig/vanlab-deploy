@@ -1,0 +1,47 @@
+## MinIO Helm values — minio/minio community chart (5.x)
+## No secret values in this file — credentials come from the minio-root SealedSecret.
+##
+## BEFORE FIRST DEPLOY: verify these keys against the pinned chart version's values.yaml.
+## Run: helm show values minio/minio --version <targetRevision>
+## Particularly verify: existingSecret key name and the console Service name.
+
+## Deployment mode — single node, single drive.
+## Durability is provided by Longhorn's 3× replication of the underlying PVC.
+mode: standalone
+
+## MinIO auth — reference the SealedSecret; do NOT set rootUser/rootPassword inline.
+## Chart 5.x key is `existingSecret` at the top level (not `auth.existingSecret`).
+## Verify with: helm show values minio/minio --version <targetRevision> | grep -A3 existingSecret
+existingSecret: minio-root
+
+## Persistent storage — Longhorn-backed PVC, 200Gi per FR-010.
+persistence:
+  enabled: true
+  storageClass: longhorn
+  size: 200Gi
+
+## Resource requests/limits — sized conservatively for arm64 CM5 nodes.
+## Longhorn backup throughput (not latency) is the workload shape; these are sufficient.
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 250m
+  limits:
+    memory: 1Gi
+    cpu: 1000m
+
+## Console service — Traefik IngressRoute targets minio-console:9001.
+## The chart default service name for the console is "<release>-console" = "minio-console".
+## No override needed if release name is "minio" (confirmed by ArgoCD app manifest).
+
+## Buckets and users are NOT provisioned here.
+## They are created manually via mc CLI at standup (see quickstart.md Steps 6–7).
+## Reason: chart-driven user creation generates random keys; we need pre-determined
+## keys that match the SealedSecret values (research.md R4).
+
+## Metrics — expose Prometheus metrics endpoint for kube-prometheus-stack scraping.
+metrics:
+  serviceMonitor:
+    enabled: true
+    namespace: monitoring
+    interval: 30s

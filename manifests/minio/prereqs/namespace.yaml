@@ -1,0 +1,11 @@
+---
+# sync wave 0 — namespace must exist before all other prereqs resources.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: minio
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  labels:
+    app.kubernetes.io/name: minio
+    argocd.argoproj.io/instance: minio-prereqs
