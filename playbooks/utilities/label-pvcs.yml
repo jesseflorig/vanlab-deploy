@@ -14,12 +14,12 @@
 # an entry to the tier_a_named section and re-running this playbook.
 
 - name: Apply Longhorn RecurringJob group labels to critical PVCs
-  hosts: localhost
-  connection: local
+  hosts: servers[0]
+  become: true
   gather_facts: false
 
   environment:
-    KUBECONFIG: "{{ lookup('env', 'KUBECONFIG') | default('/etc/rancher/k3s/k3s.yaml', true) }}"
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
   tasks:
 
