@@ -7,23 +7,26 @@
 
 ## Decision 1: BackupTarget Configuration Method
 
-**Decision**: Use Longhorn `Setting` CRDs (kind: `Setting`, API `longhorn.io/v1beta2`) to configure the backup target and credential secret name declaratively via ArgoCD.
+**Decision**: Update the pre-existing `default` `BackupTarget` resource (`longhorn.io/v1beta2`) via ArgoCD. Longhorn v1.11 replaced `Setting` CRDs for backup target config with a dedicated `BackupTarget` CRD; the `default` instance is created at Longhorn install time and should be updated (not created).
 
-**Rationale**: Longhorn represents all cluster settings as `Setting` resources in the `longhorn-system` namespace. ArgoCD can apply patches to these resources idempotently. This keeps the configuration in Git (Principle I, XI) without requiring a Helm install or UI interaction. The two settings of interest (`backup-target`, `backup-target-credential-secret`) are user-configurable and are not overwritten by the Longhorn reconciler once set.
+**Rationale**: Longhorn v1.5+ introduced the `BackupTarget` CRD and removed `backup-target`/`backup-target-credential-secret` from the `Setting` schema. The `default` BackupTarget always exists (confirmed in cluster: `kubectl get backuptargets -n longhorn-system`). ArgoCD applies the manifest as an update to the existing resource. The `Setting` approach fails with admission webhook error "setting backup-target does not exist" because these setting names were removed from Longhorn's settings registry in v1.5+.
 
 **Alternatives considered**:
+- *Setting CRDs (`backup-target`, `backup-target-credential-secret`)*: Rejected — Longhorn v1.11 admission webhook denies these with "setting does not exist"; these setting names were deprecated in v1.5+.
 - *Helm chart defaultSettings*: Only applies on initial install; cannot be used since Longhorn is already deployed via Ansible.
-- *ConfigMap override*: The agent initially suggested a ConfigMap approach; this is incorrect for a running cluster — it applies only during initial Helm install, not as a day-2 change.
-- *ArgoCD post-sync hook with `kubectl patch`*: More complex, no advantage over direct Setting CRD management.
+- *ArgoCD post-sync hook with `kubectl patch`*: More complex, no advantage over direct BackupTarget management.
 
 **YAML pattern**:
 ```yaml
 apiVersion: longhorn.io/v1beta2
-kind: Setting
+kind: BackupTarget
 metadata:
-  name: backup-target
+  name: default
   namespace: longhorn-system
-value: "s3://longhorn-backups@us-east-1/"
+spec:
+  backupTargetURL: "s3://longhorn-backups@us-east-1/"
+  credentialSecret: "longhorn-minio-credentials"
+  pollInterval: 5m0s
 ```
 
 ---
