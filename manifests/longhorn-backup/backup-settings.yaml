@@ -1,21 +1,21 @@
-# Longhorn backup target configuration — points Longhorn at the MinIO longhorn-backups
-# bucket (provisioned by spec 060). Applied after the SealedSecret (wave 0) so the
-# credential secret exists before Longhorn validates the target on first sync.
+# Longhorn BackupTarget configuration — updates the pre-existing 'default' BackupTarget
+# (created by Longhorn at install) to point at the MinIO longhorn-backups bucket.
+#
+# Longhorn v1.11 uses the BackupTarget CRD (longhorn.io/v1beta2) for backup target
+# configuration. Setting CRDs for backup-target/backup-target-credential-secret were
+# removed in v1.5+. The 'default' BackupTarget always exists; this manifest updates it.
+#
+# credentialSecret references the longhorn-minio-credentials Secret that the
+# SealedSecret (prereqs/sealed-secrets.yaml, wave 0) decrypts into longhorn-system.
 ---
 apiVersion: longhorn.io/v1beta2
-kind: Setting
+kind: BackupTarget
 metadata:
-  name: backup-target
+  name: default
   namespace: longhorn-system
   annotations:
     argocd.argoproj.io/sync-wave: "1"
-value: "s3://longhorn-backups@us-east-1/"
----
-apiVersion: longhorn.io/v1beta2
-kind: Setting
-metadata:
-  name: backup-target-credential-secret
-  namespace: longhorn-system
-  annotations:
-    argocd.argoproj.io/sync-wave: "1"
-value: "longhorn-minio-credentials"
+spec:
+  backupTargetURL: "s3://longhorn-backups@us-east-1/"
+  credentialSecret: "longhorn-minio-credentials"
+  pollInterval: 5m0s
