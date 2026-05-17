@@ -88,6 +88,7 @@ argocd_apps:
     path: manifests/longhorn-backup
     namespace: longhorn-system
     revision: main
+    recurse: true
 
 # ── Home Automation Stack ─────────────────────────────────────────────────────
 # Used by: services-deploy.yml → mosquitto, influxdb, home-assistant, node-red roles
